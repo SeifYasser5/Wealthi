@@ -1,15 +1,15 @@
-import { Router, Request, Response } from 'express';
-import pool from '../db/pool';
+import { Router, Request, Response } from 'express'
+import { prisma } from '../db/client'
 
-const router = Router();
+const router = Router()
 
 router.get('/', async (_req: Request, res: Response) => {
   try {
-    await pool.query('SELECT 1');
-    res.json({ status: 'ok', db: 'connected', timestamp: new Date().toISOString() });
-  } catch (err) {
-    res.status(503).json({ status: 'ok', db: 'disconnected', timestamp: new Date().toISOString() });
+    await prisma.$queryRaw`SELECT 1`
+    res.json({ status: 'ok', db: 'connected', timestamp: new Date().toISOString() })
+  } catch {
+    res.status(503).json({ status: 'ok', db: 'disconnected', timestamp: new Date().toISOString() })
   }
-});
+})
 
-export default router;
+export default router
