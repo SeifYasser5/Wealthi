@@ -20,8 +20,22 @@ export function TransactionsPage() {
         <FilterBar
           account={filters.account}
           merchant={filters.merchant}
+          type={filters.type}
+          transfer={filters.transfer}
+          counterAccount={filters.counterAccount}
           onAccountChange={(account) => update({ account })}
           onMerchantChange={(merchant) => update({ merchant })}
+          onTypeChange={(type) => update({ type })}
+          // Excluding transfers drops any counter account along with it; the two
+          // together describe an empty result set.
+          onTransferChange={(transfer) =>
+            update(transfer === 'exclude' ? { transfer, counterAccount: '' } : { transfer })
+          }
+          // Naming a counter account is a transfers-only query, so the transfer
+          // select is moved to match rather than left showing a wider filter.
+          onCounterAccountChange={(counterAccount) =>
+            update(counterAccount ? { counterAccount, transfer: 'only' } : { counterAccount })
+          }
         />
       </header>
 

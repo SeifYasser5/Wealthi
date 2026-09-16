@@ -1,52 +1,28 @@
 import { prisma } from './client'
 
-export interface MerchantTotal {
-  merchant: string
-  total: number
-}
-
-/** Returns debit (non-transfer) totals grouped by merchant for the given month, sorted by total desc. */
-export async function getMerchantTotals(yearMonth: string): Promise<MerchantTotal[]> {
-  const groups = await prisma.transaction.groupBy({
-    by: ['merchant'],
-    where: {
-      yearMonth,
-      type: 'debit',
-      counterAccount: null,
-      merchant: { not: null },
-    },
-    _sum: { amount: true },
-  })
-
-  return groups
-    .filter((g) => g.merchant !== null)
-    .map((g) => ({
-      merchant: g.merchant as string,
-      total: Number(g._sum.amount ?? 0),
-    }))
-    .sort((a, b) => b.total - a.total)
-}
-
-export interface LargeTransaction {
+export interface SpendingTransaction {
   id: string
   merchant: string | null
   amount: number
   account: string
+  /** Manual override; null means the merchant map decides. */
+  category: string | null
+  transactedAt: Date
 }
 
-/** Returns individual debit (non-transfer) transactions whose amount >= minAmount. */
-export async function getTransactionsAbove(
-  yearMonth: string,
-  minAmount: number,
-): Promise<LargeTransaction[]> {
+/**
+ * Every debit (non-transfer) transaction for the month — the raw input to the
+ * spending breakdown.
+ *
+ * Rollups are done in the route rather than with a `groupBy` here because the
+ * effective category of a row is `category ?? MERCHANT_CATEGORIES[merchant]`,
+ * which SQL cannot express. A single month is a few hundred rows at most, so
+ * grouping in JS costs nothing and keeps one resolution rule for all callers.
+ */
+export async function getSpendingTransactions(yearMonth: string): Promise<SpendingTransaction[]> {
   const rows = await prisma.transaction.findMany({
-    where: {
-      yearMonth,
-      type: 'debit',
-      counterAccount: null,
-      amount: { gte: minAmount },
-    },
-    select: { id: true, merchant: true, amount: true, account: true },
+    where: { yearMonth, type: 'debit', counterAccount: null },
+    select: { id: true, merchant: true, amount: true, account: true, category: true, transactedAt: true },
     orderBy: { amount: 'desc' },
   })
 
@@ -55,5 +31,7 @@ export async function getTransactionsAbove(
     merchant: r.merchant,
     amount: Number(r.amount),
     account: r.account,
+    category: r.category,
+    transactedAt: r.transactedAt,
   }))
 }

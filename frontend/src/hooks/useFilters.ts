@@ -2,12 +2,26 @@ import { useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import type { AccountId } from '../lib/accounts'
 import { isAccountId } from '../lib/accounts'
+import type { TransactionType, TransferFilter } from '../lib/api'
 import { currentYearMonth, isYearMonth } from '../lib/yearMonth'
 
 export interface Filters {
   yearMonth: string
   account: AccountId | ''
   merchant: string
+  /** '' means "both directions". */
+  type: TransactionType | ''
+  /** '' means "no transfer filter" — show transfers and non-transfers alike. */
+  transfer: TransferFilter | ''
+  counterAccount: AccountId | ''
+}
+
+function isTransferFilter(value: string): value is TransferFilter {
+  return value === 'only' || value === 'exclude'
+}
+
+function isTransactionType(value: string): value is TransactionType {
+  return value === 'debit' || value === 'credit'
 }
 
 /**
@@ -21,10 +35,20 @@ export function useFilters() {
   const filters = useMemo<Filters>(() => {
     const rawYearMonth = searchParams.get('yearMonth')
     const rawAccount = searchParams.get('account')
+    const rawType = searchParams.get('type')
+    const rawTransfer = searchParams.get('transfer')
+    const rawCounterAccount = searchParams.get('counterAccount')
+    const transfer = rawTransfer && isTransferFilter(rawTransfer) ? rawTransfer : ''
     return {
       yearMonth: rawYearMonth && isYearMonth(rawYearMonth) ? rawYearMonth : currentYearMonth(),
       account: rawAccount && isAccountId(rawAccount) ? rawAccount : '',
       merchant: searchParams.get('merchant') ?? '',
+      type: rawType && isTransactionType(rawType) ? rawType : '',
+      transfer,
+      // A counter account alongside transfer=exclude can never match a row, so a
+      // hand-edited URL carrying both is read as the exclusion it asked for.
+      counterAccount:
+        rawCounterAccount && isAccountId(rawCounterAccount) && transfer !== 'exclude' ? rawCounterAccount : '',
     }
   }, [searchParams])
 

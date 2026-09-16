@@ -11,10 +11,22 @@ import type { Filters } from './useFilters'
 export function useTransactions(filters: Filters) {
   const account = filters.account || undefined
   const merchant = filters.merchant.trim() || undefined
+  const type = filters.type || undefined
+  const transfer = filters.transfer || undefined
+  const counterAccount = filters.counterAccount || undefined
 
   return useQuery({
-    queryKey: ['transactions', filters.yearMonth, account ?? '', merchant ?? ''],
-    queryFn: ({ signal }) => fetchTransactions({ yearMonth: filters.yearMonth, account, merchant }, signal),
+    queryKey: [
+      'transactions',
+      filters.yearMonth,
+      account ?? '',
+      merchant ?? '',
+      type ?? '',
+      transfer ?? '',
+      counterAccount ?? '',
+    ],
+    queryFn: ({ signal }) =>
+      fetchTransactions({ yearMonth: filters.yearMonth, account, merchant, type, transfer, counterAccount }, signal),
     placeholderData: keepPreviousData,
   })
 }

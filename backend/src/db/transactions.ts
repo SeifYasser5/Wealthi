@@ -5,6 +5,7 @@ import type {
   ParsedTransaction,
   StagedTransaction,
   Transaction as OurTransaction,
+  TransactionType,
 } from '../utils/types'
 import type { Prisma, Transaction as PrismaRow } from '@prisma/client'
 
@@ -32,6 +33,7 @@ function mapRow(row: PrismaRow): OurTransaction {
     currency: row.currency as Currency,
     account: row.account as AccountId,
     merchant: row.merchant,
+    category: row.category,
     counterAccount: row.counterAccount as AccountId | null,
     reportedBalance: toNumber(row.reportedBalance),
     transactedAt: row.transactedAt,
@@ -60,6 +62,7 @@ function toCreateData(
     currency: tx.currency,
     account: tx.account,
     merchant: tx.merchant,
+    category: tx.category ?? null,
     reportedBalance: tx.reportedBalance,
     transactedAt: tx.transactedAt,
     raw: '',
@@ -148,29 +151,77 @@ export async function findByAccount(account: AccountId, yearMonth?: string): Pro
   return rows.map(mapRow)
 }
 
+/**
+ * Transfer-ness filter. Internal transfers are exactly the rows with a non-null
+ * `counterAccount` — the same rule `mapRow` uses to derive `isTransfer`.
+ */
+export type TransferFilter = 'only' | 'exclude'
+
 /** Filters for the transaction listing endpoint. All are optional and AND-combined. */
 export interface TransactionQuery {
   yearMonth?: string
   account?: AccountId
   /** Case-insensitive substring match against the merchant name. */
   merchant?: string
+  /** 'only' keeps internal transfers; 'exclude' keeps everything else. */
+  transfer?: TransferFilter
+  /** The other side of an internal transfer. Implies `transfer: 'only'`. */
+  counterAccount?: AccountId
+  /** Direction: 'debit' for money out, 'credit' for money in. */
+  type?: TransactionType
 }
 
 /**
- * Queries transactions by any combination of yearMonth, account, and merchant,
- * ordered by transactedAt descending (createdAt as tiebreak).
+ * Queries transactions by any combination of yearMonth, account, merchant,
+ * direction, and transfer-ness, ordered by transactedAt descending (createdAt
+ * as tiebreak).
  */
 export async function queryTransactions(filters: TransactionQuery, db: Db = prisma): Promise<OurTransaction[]> {
   const where: Prisma.TransactionWhereInput = {}
   if (filters.yearMonth) where.yearMonth = filters.yearMonth
   if (filters.account) where.account = filters.account
   if (filters.merchant) where.merchant = { contains: filters.merchant, mode: 'insensitive' }
+  if (filters.type) where.type = filters.type
+
+  // A specific counter account is the narrower constraint, so it wins over a
+  // bare `transfer: 'only'`; the route rejects the contradictory pairing with
+  // 'exclude' before we get here.
+  if (filters.counterAccount) {
+    where.counterAccount = filters.counterAccount
+  } else if (filters.transfer === 'only') {
+    where.counterAccount = { not: null }
+  } else if (filters.transfer === 'exclude') {
+    where.counterAccount = null
+  }
 
   const rows = await db.transaction.findMany({
     where,
     orderBy: [{ transactedAt: 'desc' }, { createdAt: 'desc' }],
   })
   return rows.map(mapRow)
+}
+
+/**
+ * Sets (or clears, with `null`) the manual category on one transaction.
+ * Returns the updated row, or null when no transaction has that id.
+ *
+ * Categories are presentation-only — no balance or transfer state is derived
+ * from them — so this never needs a balance recompute.
+ */
+export async function updateCategory(
+  id: string,
+  category: string | null,
+  db: Db = prisma,
+): Promise<OurTransaction | null> {
+  try {
+    const row = await db.transaction.update({ where: { id }, data: { category } })
+    return mapRow(row)
+  } catch (err) {
+    // P2025 — "record to update not found". The route turns this into a 404;
+    // anything else is a real failure and keeps propagating.
+    if ((err as { code?: string }).code === 'P2025') return null
+    throw err
+  }
 }
 
 /**
