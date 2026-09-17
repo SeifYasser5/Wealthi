@@ -1,0 +1,51 @@
+{
+  "bankSenders": ["MyBank"],
+  "accounts": [
+    { "id": "checking", "label": "Checking", "currency": "EGP" },
+    { "id": "credit_card", "label": "Credit Card", "currency": "EGP" },
+    { "id": "savings_usd", "label": "Savings (USD)", "currency": "USD" }
+  ],
+  "accountSources": {
+    "mybank:1234": "checking",
+    "mybank:5678": "credit_card",
+    "mybank:9012": "savings_usd"
+  },
+  "openingBalances": {
+    "checking": 0,
+    "credit_card": 0,
+    "savings_usd": 0
+  },
+  "merchantCategories": {
+    "EXAMPLE SUPERMARKET": "Groceries"
+  },
+  "extraCategories": ["Rent"],
+  "transferRules": [
+    { "id": "card-payment", "account": "checking", "type": "debit", "merchant": "CARD PAYMENT", "counterAccount": "credit_card" }
+  ],
+  "recurringTransactions": [
+    { "type": "debit", "amount": 100, "currency": "EGP", "account": "checking", "merchant": "Monthly fee", "startYearMonth": "2026-01", "dayOfMonth": 1 }
+  ],
+  "manualTransactions": [
+    { "type": "debit", "amount": 50, "currency": "EGP", "account": "checking", "merchant": "Bank fee", "date": "2026-01-15" }
+  ],
+  "csvImports": [
+    {
+      "id": "usd-conversions",
+      "file": "data/{yearMonth}/conversions.csv",
+      "from": "2026-01",
+      "to": "2026-06",
+      "account": "checking",
+      "counterAccount": "savings_usd",
+      "columns": { "day": "Day", "amount": "Amount" },
+      "values": { "type": "credit", "currency": "EGP", "merchant": "USD conversion" }
+    },
+    {
+      "id": "card-statement",
+      "file": "data/statements/card.csv",
+      "from": "2026-01",
+      "account": "credit_card",
+      "columns": { "date": "Posted Date", "amount": "Amount", "merchant": "Description" },
+      "values": { "currency": "EGP" }
+    }
+  ]
+}

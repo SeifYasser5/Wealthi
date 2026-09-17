@@ -39,6 +39,37 @@ export interface Account {
   currency: Currency
 }
 
+/**
+ * A CSV file (or one file per month) of transactions that never arrive by SMS.
+ * See helpers/csv-loader.ts for how rows become transactions.
+ */
+export interface CsvImport {
+  /** Human-readable id, used in error messages */
+  id: string
+  /**
+   * Path relative to backend/. May contain {yearMonth}, {year} and {month},
+   * e.g. "data/{yearMonth}/usd.csv".
+   */
+  file: string
+  /** "YYYY-MM", inclusive — first month the file exists for */
+  from: string
+  /** "YYYY-MM", inclusive. Omit to keep importing through the current month. */
+  to?: string
+  /** Cell separator, default "," */
+  delimiter?: string
+  /** Own account every row lands on */
+  account: AccountId
+  /** Set when every row is an internal transfer from/to this own account */
+  counterAccount?: AccountId
+  /**
+   * CSV header name per field. `amount` is required, plus either `date`
+   * ("YYYY-MM-DD…") or `day` (day of the month the file belongs to).
+   */
+  columns: { amount: string; date?: string; day?: string; type?: string; currency?: string; merchant?: string }
+  /** Fixed values for fields with no column, or for empty cells in one */
+  values?: { type?: 'debit' | 'credit'; currency?: Currency; merchant?: string }
+}
+
 export interface WealthiConfig {
   /**
    * chat.db `handle.id` of each bank's SMS sender — the display name or phone
@@ -60,6 +91,8 @@ export interface WealthiConfig {
   transferRules: TransferRule[]
   recurringTransactions: RecurringEntry[]
   manualTransactions: ManualEntry[]
+  /** Optional; defaults to none */
+  csvImports: CsvImport[]
 }
 
 export const CONFIG_PATH = resolve(__dirname, '../../config/wealthi.json')
@@ -134,6 +167,35 @@ function validate(raw: WealthiConfig): WealthiConfig {
     const where = `manualTransactions[${i}]`
     checkEntry(ids, e, where)
     if (!/^\d{4}-\d{2}-\d{2}$/.test(e.date)) fail(`${where}: date must be "YYYY-MM-DD"`)
+  })
+
+  raw.csvImports ??= []
+  if (!Array.isArray(raw.csvImports)) fail('csvImports must be an array')
+  raw.csvImports.forEach((c, i) => {
+    const where = `csvImports[${i}]`
+    if (typeof c.id !== 'string') fail(`${where}: id must be a string`)
+    if (typeof c.file !== 'string' || c.file === '') fail(`${where}: file must be a non-empty string`)
+    if (!/^\d{4}-\d{2}$/.test(c.from)) fail(`${where}: from must be "YYYY-MM"`)
+    if (c.to !== undefined && (!/^\d{4}-\d{2}$/.test(c.to) || c.to < c.from)) {
+      fail(`${where}: to must be "YYYY-MM" and not before from`)
+    }
+    if (c.delimiter !== undefined && (typeof c.delimiter !== 'string' || c.delimiter.length !== 1)) {
+      fail(`${where}: delimiter must be a single character`)
+    }
+    checkAccount(ids, c.account, where)
+    if (c.counterAccount !== undefined) checkAccount(ids, c.counterAccount, where)
+
+    const columns = c.columns ?? {}
+    if (typeof columns.amount !== 'string') fail(`${where}: columns.amount is required`)
+    if ((columns.date === undefined) === (columns.day === undefined))
+      fail(`${where}: set exactly one of columns.date or columns.day`)
+    const values = c.values ?? {}
+    if (values.type !== undefined && !TX_TYPES.includes(values.type)) fail(`${where}: values.type must be debit|credit`)
+    if (values.currency !== undefined && !CURRENCIES.includes(values.currency))
+      fail(`${where}: values.currency must be EGP|USD`)
+    if (columns.currency === undefined && values.currency === undefined) {
+      fail(`${where}: set columns.currency or values.currency`)
+    }
   })
   return raw
 }
