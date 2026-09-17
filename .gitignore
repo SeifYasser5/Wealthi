@@ -140,3 +140,6 @@ backend/data
 
 # Private personal config (balances, merchants, transfer rules, manual entries)
 backend/config/wealthi.json
+CLAUDE.md
+ARCHITECTURE.md
+.vscode
