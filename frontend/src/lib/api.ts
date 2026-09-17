@@ -5,11 +5,13 @@ import type { AccountId } from './accounts'
 export interface Transaction {
   id: string
   yearMonth: string
-  type: 'debit' | 'credit'
+  type: TransactionType
   amount: number
   currency: 'EGP' | 'USD'
   account: AccountId
   merchant: string | null
+  /** Manually assigned category; null means the backend merchant map decides. */
+  category: string | null
   counterAccount: AccountId | null
   reportedBalance: number | null
   transactedAt: string | null
@@ -23,10 +25,21 @@ export interface TransactionsResponse {
   transactions: Transaction[]
 }
 
+/** Mirrors the backend TransferFilter (backend/src/db/transactions.ts). */
+export type TransferFilter = 'only' | 'exclude'
+
+/** Direction of a transaction: debit = money out, credit = money in. */
+export type TransactionType = 'debit' | 'credit'
+
 export interface TransactionFilters {
   yearMonth?: string
   account?: AccountId
   merchant?: string
+  type?: TransactionType
+  /** 'only' keeps internal transfers; 'exclude' keeps everything else. */
+  transfer?: TransferFilter
+  /** The other side of an internal transfer. Implies `transfer: 'only'`. */
+  counterAccount?: AccountId
 }
 
 /** Fetches transactions from the backend, applying any provided filters. */
@@ -38,6 +51,12 @@ export async function fetchTransactions(
   if (filters.yearMonth) params.set('yearMonth', filters.yearMonth)
   if (filters.account) params.set('account', filters.account)
   if (filters.merchant) params.set('merchant', filters.merchant)
+  if (filters.type) params.set('type', filters.type)
+  if (filters.transfer) params.set('transfer', filters.transfer)
+  // The backend rejects this pairing outright, so never put it on the wire.
+  if (filters.counterAccount && filters.transfer !== 'exclude') {
+    params.set('counterAccount', filters.counterAccount)
+  }
 
   const query = params.toString()
   const res = await fetch(`/api/transactions${query ? `?${query}` : ''}`, { signal })
@@ -103,11 +122,23 @@ export interface LargeTransactionRow {
   pct: number
 }
 
+/** An uncategorized transaction, addressable by id so it can be assigned a category. */
+export interface UncategorizedTransactionRow {
+  id: string
+  merchant: string | null
+  amount: number
+  account: string
+  transactedAt: string
+  pct: number
+}
+
 export interface SpendingResponse {
   yearMonth: string
   grandTotal: number
   categories: CategoryRow[]
   largeTransactions: LargeTransactionRow[]
+  /** Uncategorized rows not already promoted into `largeTransactions`. */
+  uncategorized: UncategorizedTransactionRow[]
 }
 
 /** Fetches debit spending grouped by category → merchant for one month. */
@@ -121,4 +152,42 @@ export async function fetchSpending(yearMonth: string, signal?: AbortSignal): Pr
   }
 
   return res.json() as Promise<SpendingResponse>
+}
+
+export interface CategoriesResponse {
+  /** Assignable categories — the exact set the PATCH endpoint accepts. */
+  categories: string[]
+  /** Label for rows with no category; not assignable. */
+  uncategorized: string
+}
+
+/** Fetches the category vocabulary that populates the category dropdowns. */
+export async function fetchCategories(signal?: AbortSignal): Promise<CategoriesResponse> {
+  const res = await fetch('/api/categories', { signal })
+
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null
+    throw new Error(body?.error ?? `Request failed with status ${res.status}`)
+  }
+
+  return res.json() as Promise<CategoriesResponse>
+}
+
+/** Assigns a category to one transaction, or clears it when `category` is null. */
+export async function updateTransactionCategory(
+  id: string,
+  category: string | null,
+): Promise<{ transaction: Transaction }> {
+  const res = await fetch(`/api/transactions/${id}/category`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ category }),
+  })
+
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null
+    throw new Error(body?.error ?? `Request failed with status ${res.status}`)
+  }
+
+  return res.json() as Promise<{ transaction: Transaction }>
 }
