@@ -142,4 +142,13 @@ backend/data
 backend/config/wealthi.json
 CLAUDE.md
 ARCHITECTURE.md
+PATTERNS.md
+PATTERNS-ALGORITHM.md
 .vscode
+
+# Learned SMS patterns (mined from your own messages)
+backend/config/patterns/
+
+# Old parser
+backend/src/services/parse/banks
+backend/src/services/decode.ts

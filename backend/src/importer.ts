@@ -3,8 +3,8 @@ import { readMessages } from './services/reader'
 import type { DbRow, StagedTransaction, AccountBalance, StageMessages, RecomputeBalance } from './utils/types'
 import { ALL_ACCOUNTS } from './utils/accounts'
 import { config } from './utils/config'
-import { decode } from './services/decode'
-import { parse } from './services/parse'
+import { decode } from './services/decode-v2'
+import { parseWithPatterns } from './services/patterns/parser'
 import { classifyTransfer } from './services/transfer'
 import { toYearMonth } from './utils/helpers'
 import { upsertAllBalances } from './db/balances'
@@ -47,9 +47,10 @@ function stageMessages(messages: DbRow[]): StageMessages {
 
     const decoded = decode(raw)
 
-    const parsed = parse(decoded)
+    const parsed = parseWithPatterns(decoded)
     if (!parsed.ok) {
-      errors.push({ stage: 'parse', decoded, cause: parsed.error })
+      // Skipped on purpose (a foreign-currency charge) — not an error.
+      if (!parsed.skipped) errors.push({ stage: 'parse', decoded, cause: parsed.error })
       continue
     }
 
