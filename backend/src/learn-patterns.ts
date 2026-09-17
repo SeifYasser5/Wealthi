@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { readMessages } from './services/reader'
-import { decode, DecodeError } from './services/decode-v2'
+import { decode, DecodeError } from './services/decode'
 import { learnBank } from './services/patterns/learn'
 import { bankOf, loadPatternFiles, mergePatterns, savePatternFile } from './services/patterns/store'
 import { config } from './utils/config'

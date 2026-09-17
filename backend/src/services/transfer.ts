@@ -47,7 +47,3 @@ export function classifyTransfer(tx: ParsedTransaction): ParsedTransaction {
   if (!rule) return tx
   return { ...tx, counterAccount: rule.counterAccount }
 }
-
-export function classifyTransfers(txs: ParsedTransaction[]): ParsedTransaction[] {
-  return txs.map(classifyTransfer)
-}

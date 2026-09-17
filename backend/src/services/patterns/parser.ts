@@ -1,6 +1,5 @@
 import type { Currency, DecodedMessage, ParsedTransaction } from '../../utils/types'
 import { ACCOUNTS, accountFor } from '../../utils/accounts'
-import { ParseError } from '../parse'
 import { CURRENCIES, extract, type Pattern, type PatternFile } from './pattern'
 import { loadPatternFiles } from './store'
 
@@ -17,6 +16,20 @@ import { loadPatternFiles } from './store'
  *
  * The account comes from accountSources["<bank>:<last 4 digits>"].
  */
+
+export class ParseError extends Error {
+  readonly cause: unknown
+
+  constructor(
+    public readonly parser: string,
+    public readonly raw: string,
+    cause?: unknown,
+  ) {
+    super(`[${parser}] failed to parse${typeof cause === 'string' ? ` (${cause})` : ''}: ${raw.slice(0, 80)}`)
+    this.name = 'ParseError'
+    this.cause = cause
+  }
+}
 
 export type PatternParseResult =
   | { ok: true; value: ParsedTransaction; patternId: string }

@@ -74,49 +74,6 @@ function toCreateData(
   }
 }
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
-/** Inserts a single parsed transaction and returns it with generated id and createdAt. */
-export async function insert(tx: ParsedTransaction, yearMonth: string): Promise<OurTransaction> {
-  const row = await prisma.transaction.create({ data: toCreateData(tx, yearMonth) })
-  return mapRow(row)
-}
-
-/**
- * Inserts a batch of transactions. When called with a transaction client `db`,
- * atomicity is guaranteed by the caller's surrounding `$transaction`. When
- * called on the bare prisma client each create runs in its own implicit tx.
- */
-export async function insertMany(
-  txs: ParsedTransaction[],
-  yearMonth: string,
-  db: Db = prisma,
-): Promise<OurTransaction[]> {
-  if (txs.length === 0) return []
-  const rows = await Promise.all(txs.map((tx) => db.transaction.create({ data: toCreateData(tx, yearMonth) })))
-  return rows.map(mapRow)
-}
-
-/** The most recent month ("YYYY-MM") that has any stored transaction, or null when empty. */
-export async function latestStoredMonth(db: Db = prisma): Promise<string | null> {
-  const row = await db.transaction.findFirst({
-    orderBy: { yearMonth: 'desc' },
-    select: { yearMonth: true },
-  })
-  return row?.yearMonth ?? null
-}
-
-/** All transactions for a calendar month, ordered by transactedAt then createdAt. */
-export async function findByMonth(yearMonth: string, db: Db = prisma): Promise<OurTransaction[]> {
-  const rows = await db.transaction.findMany({
-    where: { yearMonth },
-    orderBy: [{ transactedAt: 'asc' }, { createdAt: 'asc' }],
-  })
-  return rows.map(mapRow)
-}
-
 /**
  * All transactions at or after `fromYearMonth`, ordered chronologically.
  * One query for the whole cascade range; the caller groups them by month.
@@ -125,28 +82,6 @@ export async function findFromMonth(fromYearMonth: string, db: Db = prisma): Pro
   const rows = await db.transaction.findMany({
     where: { yearMonth: { gte: fromYearMonth } },
     orderBy: [{ yearMonth: 'asc' }, { transactedAt: 'asc' }, { createdAt: 'asc' }],
-  })
-  return rows.map(mapRow)
-}
-
-/**
- * Deletes all transactions for a calendar month.
- * Used before re-importing to keep runs idempotent.
- * Returns the number of rows deleted.
- */
-export async function deleteByMonth(yearMonth: string): Promise<number> {
-  const { count } = await prisma.transaction.deleteMany({ where: { yearMonth } })
-  return count
-}
-
-/**
- * Transactions for one account, optionally scoped to a single month.
- * Results are ordered chronologically (nulls last).
- */
-export async function findByAccount(account: AccountId, yearMonth?: string): Promise<OurTransaction[]> {
-  const rows = await prisma.transaction.findMany({
-    where: yearMonth ? { account, yearMonth } : { account },
-    orderBy: { transactedAt: 'asc' },
   })
   return rows.map(mapRow)
 }

@@ -140,7 +140,3 @@ dist
 backend/config/
 backend/data/
 .claude/
-
-# Old parser
-backend/src/services/parse/banks/
-backend/src/services/decode.ts

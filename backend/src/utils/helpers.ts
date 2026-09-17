@@ -14,12 +14,6 @@ export function toYearMonth(date: Date): string {
   return `${y}-${m}`
 }
 
-/** First instant (local time) of a "YYYY-MM" month. */
-export function startOfMonth(yearMonth: string): Date {
-  const [y, m] = yearMonth.split('-').map(Number)
-  return new Date(y, m - 1, 1)
-}
-
 /** Returns the inclusive list of "YYYY-MM" strings from start to end. */
 export function monthRange(start: string, end: string): string[] {
   const [sy, sm] = start.split('-').map(Number)
@@ -37,15 +31,6 @@ export function monthRange(start: string, end: string): string[] {
     }
   }
   return result
-}
-
-/** Formats a Date as a local-time ISO-like string (no UTC offset). */
-export function toLocalISO(date: Date): string {
-  const p = (n: number) => String(n).padStart(2, '0')
-  return (
-    `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}` +
-    `T${p(date.getHours())}:${p(date.getMinutes())}:${p(date.getSeconds())}`
-  )
 }
 
 // Avoids floating-point drift in the output (e.g. 0.1 + 0.2 → 0.30000000000000004)

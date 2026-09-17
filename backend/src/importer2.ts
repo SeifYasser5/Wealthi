@@ -12,7 +12,7 @@ import type {
 } from './utils/types'
 import { ALL_ACCOUNTS } from './utils/accounts'
 import { config } from './utils/config'
-import { decode } from './services/decode-v2'
+import { decode } from './services/decode'
 import { parseWithPatterns } from './services/patterns/parser'
 import { classifyTransfer } from './services/transfer'
 import { toYearMonth, monthRange } from './utils/helpers'
