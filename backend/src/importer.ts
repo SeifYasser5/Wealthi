@@ -1,7 +1,8 @@
 import { existsSync } from 'node:fs'
 import { readMessages } from './services/reader'
 import type { DbRow, StagedTransaction, AccountBalance, StageMessages, RecomputeBalance } from './utils/types'
-import { ALL_ACCOUNTS, BALANCES, BANK_SENDERS } from './utils/constants'
+import { ALL_ACCOUNTS } from './utils/accounts'
+import { config } from './utils/config'
 import { decode } from './services/decode'
 import { parse } from './services/parse'
 import { classifyTransfer } from './services/transfer'
@@ -17,7 +18,7 @@ import { manualTransactions } from './helpers/manual-transactions'
 export async function importFromChatDb(chatDbPath: string): Promise<ImportSummary> {
   if (!existsSync(chatDbPath)) throw new Error(`chat.db not found at: ${chatDbPath}`)
 
-  const messages = readMessages(chatDbPath, [...BANK_SENDERS], undefined)
+  const messages = readMessages(chatDbPath, config.bankSenders, undefined)
   const { transactions, errors, earliest } = stageMessages(messages)
   if (transactions.length === 0 || earliest === null) return { months: 0, totalStored: 0, errors }
   const { balances, months } = await recomputeBalances(transactions, earliest)
@@ -66,7 +67,7 @@ async function recomputeBalances(staged: StagedTransaction[], _: string): Recomp
   const byMonth = groupByMonth([...stored, ...staged])
   const months = [...byMonth.keys()].sort().slice(-6)
   const balances: AccountBalance[] = []
-  let opening = { ...BALANCES }
+  let opening = { ...config.openingBalances }
 
   for (const yearMonth of months) {
     const csv = loadCsvTransactions(yearMonth)

@@ -10,7 +10,8 @@ import type {
   ImportError,
   ImportSummary,
 } from './utils/types'
-import { ALL_ACCOUNTS, BANK_SENDERS } from './utils/constants'
+import { ALL_ACCOUNTS } from './utils/accounts'
+import { config } from './utils/config'
 import { decode } from './services/decode'
 import { parse } from './services/parse'
 import { classifyTransfer } from './services/transfer'
@@ -34,7 +35,7 @@ export const importFromChatDb = async (chatDbPath: string, now: Date = new Date(
   if (!existsSync(chatDbPath)) throw new Error(`chat.db not found at: ${chatDbPath}`)
 
   const cursor = await getImportCursor()
-  const messages = readMessages(chatDbPath, [...BANK_SENDERS], cursor)
+  const messages = readMessages(chatDbPath, config.bankSenders, cursor)
   const { transactions, errors, earliest, maxRowid } = stageMessages(messages)
   if (transactions.length === 0 || earliest === null || maxRowid === null) return { months: 0, totalStored: 0, errors }
   const { balances, months } = await recomputeBalances(transactions, earliest, toYearMonth(now))

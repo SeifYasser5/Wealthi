@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import type { AccountId } from '../lib/accounts'
-import { isAccountId } from '../lib/accounts'
+import { useAccounts } from './useAccounts'
 import type { TransactionType, TransferFilter } from '../lib/api'
 import { currentYearMonth, isYearMonth } from '../lib/yearMonth'
 
@@ -31,6 +31,9 @@ function isTransactionType(value: string): value is TransactionType {
  */
 export function useFilters() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const { isLoaded, isAccountId } = useAccounts()
+  // Until the account list loads, trust the URL; the backend still validates it.
+  const knownAccount = useCallback((id: string) => !isLoaded || isAccountId(id), [isLoaded, isAccountId])
 
   const filters = useMemo<Filters>(() => {
     const rawYearMonth = searchParams.get('yearMonth')
@@ -41,16 +44,16 @@ export function useFilters() {
     const transfer = rawTransfer && isTransferFilter(rawTransfer) ? rawTransfer : ''
     return {
       yearMonth: rawYearMonth && isYearMonth(rawYearMonth) ? rawYearMonth : currentYearMonth(),
-      account: rawAccount && isAccountId(rawAccount) ? rawAccount : '',
+      account: rawAccount && knownAccount(rawAccount) ? rawAccount : '',
       merchant: searchParams.get('merchant') ?? '',
       type: rawType && isTransactionType(rawType) ? rawType : '',
       transfer,
       // A counter account alongside transfer=exclude can never match a row, so a
       // hand-edited URL carrying both is read as the exclusion it asked for.
       counterAccount:
-        rawCounterAccount && isAccountId(rawCounterAccount) && transfer !== 'exclude' ? rawCounterAccount : '',
+        rawCounterAccount && knownAccount(rawCounterAccount) && transfer !== 'exclude' ? rawCounterAccount : '',
     }
-  }, [searchParams])
+  }, [searchParams, knownAccount])
 
   // Merge a partial update into the existing params; empty values are removed
   // so the URL stays clean. Preserves keys we don't touch.

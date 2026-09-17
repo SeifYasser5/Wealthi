@@ -1,4 +1,4 @@
-import type { AccountId } from './accounts'
+import type { Account, AccountId } from './accounts'
 
 // Shape of a transaction as serialized by GET /api/transactions.
 // Dates arrive as ISO strings over JSON.
@@ -152,6 +152,23 @@ export async function fetchSpending(yearMonth: string, signal?: AbortSignal): Pr
   }
 
   return res.json() as Promise<SpendingResponse>
+}
+
+export interface AccountsResponse {
+  /** Your accounts in display order, with the label and currency to show. */
+  accounts: Account[]
+}
+
+/** Fetches the configured account list. */
+export async function fetchAccounts(signal?: AbortSignal): Promise<AccountsResponse> {
+  const res = await fetch('/api/accounts', { signal })
+
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null
+    throw new Error(body?.error ?? `Request failed with status ${res.status}`)
+  }
+
+  return res.json() as Promise<AccountsResponse>
 }
 
 export interface CategoriesResponse {

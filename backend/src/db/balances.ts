@@ -1,5 +1,5 @@
 import { prisma } from './client'
-import { BALANCES } from '../utils/constants'
+import { config } from '../utils/config'
 import type { AccountBalance, AccountId } from '../utils/types'
 import type { Prisma } from '@prisma/client'
 
@@ -44,7 +44,7 @@ export async function upsertBalance(bal: AccountBalance, db: Db = prisma): Promi
 
 /**
  * Opening balances for `yearMonth` = closing balances of the most recent
- * snapshotted month strictly before it. Falls back to the genesis BALANCES
+ * snapshotted month strictly before it. Falls back to the genesis openingBalances
  * when no earlier snapshot exists (i.e. `yearMonth` is the very first month).
  */
 export async function openingFor(yearMonth: string, db: Db = prisma): Promise<OpeningBalances> {
@@ -53,10 +53,10 @@ export async function openingFor(yearMonth: string, db: Db = prisma): Promise<Op
     orderBy: { yearMonth: 'desc' },
     select: { yearMonth: true },
   })
-  if (!prior) return { ...BALANCES }
+  if (!prior) return { ...config.openingBalances }
 
   const rows = await db.monthlyBalance.findMany({ where: { yearMonth: prior.yearMonth } })
-  const opening = { ...BALANCES }
+  const opening = { ...config.openingBalances }
   for (const row of rows) {
     opening[row.account as AccountId] = row.closingBalance.toNumber()
   }

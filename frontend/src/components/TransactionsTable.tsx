@@ -1,4 +1,4 @@
-import { accountLabel } from '../lib/accounts'
+import { useAccounts } from '../hooks/useAccounts'
 import type { Transaction } from '../lib/api'
 
 interface Props {
@@ -38,6 +38,7 @@ function buildComputedBalances(transactions: Transaction[]): (number | null)[] {
 }
 
 export function TransactionsTable({ transactions }: Props) {
+  const { label: accountLabel } = useAccounts()
   const hasEgp = transactions.some((tx) => tx.currency === 'EGP')
   const hasUsd = transactions.some((tx) => tx.currency === 'USD')
   const egpNet = hasEgp ? netByCurrency(transactions, 'EGP') : 0

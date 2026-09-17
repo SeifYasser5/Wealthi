@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ACCOUNTS, type AccountId } from '../lib/accounts'
+import { useAccounts } from '../hooks/useAccounts'
+import type { AccountId } from '../lib/accounts'
 import type { TransactionType, TransferFilter } from '../lib/api'
 
 interface Props {
@@ -63,6 +64,7 @@ export function FilterBar({
   onTransferChange,
   onCounterAccountChange,
 }: Props) {
+  const { accounts } = useAccounts()
   const [text, setText] = useState(merchant)
   const onMerchantChangeRef = useRef(onMerchantChange)
   onMerchantChangeRef.current = onMerchantChange
@@ -85,7 +87,7 @@ export function FilterBar({
     <div className="flex flex-wrap items-center justify-center gap-3">
       <Select value={account} onChange={(v) => onAccountChange(v as AccountId | '')}>
         <option value="">All accounts</option>
-        {ACCOUNTS.map((a) => (
+        {accounts.map((a) => (
           <option key={a.id} value={a.id}>
             {a.label}
           </option>
@@ -111,7 +113,7 @@ export function FilterBar({
         title={counterDisabled ? 'Not available while transfers are excluded' : undefined}
       >
         <option value="">Any counter account</option>
-        {ACCOUNTS.map((a) => (
+        {accounts.map((a) => (
           <option key={a.id} value={a.id}>
             ↔ {a.label}
           </option>

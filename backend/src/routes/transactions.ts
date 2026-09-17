@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { queryTransactions, updateCategory, type TransferFilter } from '../db/transactions'
 import { isSpendingCategory, SPENDING_CATEGORIES } from '../utils/categories'
-import { ALL_ACCOUNTS } from '../utils/constants'
+import { ALL_ACCOUNTS, isAccountId } from '../utils/accounts'
 import type { AccountId, TransactionType } from '../utils/types'
 
 const router = Router()
@@ -26,7 +26,7 @@ router.get('/', async (req: Request, res: Response) => {
   if (yearMonth !== undefined && (typeof yearMonth !== 'string' || !YEAR_MONTH_RE.test(yearMonth))) {
     return res.status(400).json({ error: 'yearMonth must be in YYYY-MM format' })
   }
-  if (account !== undefined && (typeof account !== 'string' || !ALL_ACCOUNTS.includes(account as AccountId))) {
+  if (account !== undefined && (typeof account !== 'string' || !isAccountId(account))) {
     return res.status(400).json({ error: `account must be one of: ${ALL_ACCOUNTS.join(', ')}` })
   }
   if (merchant !== undefined && typeof merchant !== 'string') {
@@ -41,10 +41,7 @@ router.get('/', async (req: Request, res: Response) => {
   ) {
     return res.status(400).json({ error: `transfer must be one of: ${TRANSFER_FILTERS.join(', ')}` })
   }
-  if (
-    counterAccount !== undefined &&
-    (typeof counterAccount !== 'string' || !ALL_ACCOUNTS.includes(counterAccount as AccountId))
-  ) {
+  if (counterAccount !== undefined && (typeof counterAccount !== 'string' || !isAccountId(counterAccount))) {
     return res.status(400).json({ error: `counterAccount must be one of: ${ALL_ACCOUNTS.join(', ')}` })
   }
   // Asking for a counter account while excluding transfers can never match a row.

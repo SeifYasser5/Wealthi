@@ -1,4 +1,4 @@
-import { accountCurrency, accountLabel } from '../lib/accounts'
+import { useAccounts } from '../hooks/useAccounts'
 import type { AccountBalance } from '../lib/api'
 
 interface Props {
@@ -31,16 +31,20 @@ function sumGroup(group: AccountBalance[], currency: 'EGP' | 'USD') {
 }
 
 export function BalancesTable({ balances }: Props) {
+  const { currency: accountCurrency, label: accountLabel, isLoaded } = useAccounts()
+  // Totals group by account currency, so they wait for the account list.
   const egpGroup = balances.filter((b) => accountCurrency(b.account) === 'EGP')
   const usdGroup = balances.filter((b) => accountCurrency(b.account) === 'USD')
-  const totals = [
-    ...(egpGroup.length > 0
-      ? [{ label: egpGroup.length > 1 ? 'Total (EGP)' : 'Total', ...sumGroup(egpGroup, 'EGP') }]
-      : []),
-    ...(usdGroup.length > 0
-      ? [{ label: usdGroup.length > 1 ? 'Total (USD)' : 'Total', ...sumGroup(usdGroup, 'USD') }]
-      : []),
-  ]
+  const totals = !isLoaded
+    ? []
+    : [
+        ...(egpGroup.length > 0
+          ? [{ label: egpGroup.length > 1 ? 'Total (EGP)' : 'Total', ...sumGroup(egpGroup, 'EGP') }]
+          : []),
+        ...(usdGroup.length > 0
+          ? [{ label: usdGroup.length > 1 ? 'Total (USD)' : 'Total', ...sumGroup(usdGroup, 'USD') }]
+          : []),
+      ]
 
   return (
     <div className="overflow-x-auto rounded-2xl border border-black bg-white">
