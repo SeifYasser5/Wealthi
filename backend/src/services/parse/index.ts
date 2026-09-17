@@ -1,6 +1,12 @@
 import type { AccountId, DecodedMessage, ParsedTransaction } from '../../utils/types'
 import { accountFor } from '../../utils/accounts'
-import { DEFAULT_PARSERS } from './banks'
+
+/**
+ * Shared types for hand-written per-bank parsers. The parsers themselves live in
+ * ./banks, which is gitignored: each one encodes the SMS templates of a real
+ * account, so they are kept out of the repo. The import path in use is the
+ * learned pattern parser in ../patterns — see PATTERNS.md.
+ */
 
 export interface BankParser {
   readonly bank: string
@@ -35,8 +41,13 @@ export function requireAccount(parser: string, source: string, raw: string): Acc
 
 export type DispatchResult = { ok: true; value: ParsedTransaction } | { ok: false; error: ParseError | string }
 
-export function parse(message: DecodedMessage): DispatchResult {
-  const parser = DEFAULT_PARSERS.find((p) => p.canParse(message))
+/**
+ * Dispatches a message to the first parser that recognises it. The registry is
+ * passed in because ./banks is not part of the repo — a local setup calls this
+ * with its own parsers; the committed pipeline never does.
+ */
+export function parseWith(parsers: BankParser[], message: DecodedMessage): DispatchResult {
+  const parser = parsers.find((p) => p.canParse(message))
   if (!parser) return { ok: false, error: 'no parser found' }
   try {
     return { ok: true, value: parser.parse(message) }

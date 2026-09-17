@@ -8,7 +8,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-wealthi_secret}
       POSTGRES_DB: ${POSTGRES_DB:-wealthi_db}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      # Bound to loopback on purpose: the DB holds your financial history and the
+      # default password above is public. Do not widen this without changing it.
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
