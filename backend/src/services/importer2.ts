@@ -77,7 +77,6 @@ const stageMessages = (messages: DbRow[]): StageMessages => {
     }
 
     const tx = classifyTransfer(parsed.value)
-
     const yearMonth = toYearMonth(tx.transactedAt)
     transactions.push({ ...tx, yearMonth })
     if (earliest === null || yearMonth < earliest) earliest = yearMonth
