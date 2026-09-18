@@ -1,14 +1,5 @@
 import { prisma } from './client'
-
-export interface SpendingTransaction {
-  id: string
-  merchant: string | null
-  amount: number
-  account: string
-  /** Manual override; null means the merchant map decides. */
-  category: string | null
-  transactedAt: Date
-}
+import type { SpendingTransaction } from '../utils/types'
 
 /**
  * Every debit (non-transfer) transaction for the month — the raw input to the

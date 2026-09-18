@@ -1,5 +1,6 @@
 import type { CategoryRow, LargeTransactionRow, SpendingResponse, UncategorizedTransactionRow } from '@wealthi/shared'
-import { getSpendingTransactions, SpendingTransaction } from '../db/spending'
+import { getSpendingTransactions } from '../db/spending'
+import type { SpendingTransaction } from '../utils/types'
 import { resolveCategory, UNCATEGORIZED, UNKNOWN_MERCHANT } from '../utils/categories'
 import { round2 } from '../utils/helpers'
 

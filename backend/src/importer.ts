@@ -11,8 +11,8 @@ import { computeBalance } from './services/balance'
 import { createAllTransactions } from './db/transactions'
 import { prisma } from './db/client'
 import { ImportError, ImportSummary } from './utils/types'
-import { loadCsvTransactions } from './helpers/csv-loader'
-import { manualTransactions } from './helpers/manual-transactions'
+import { loadCsvTransactions } from './services/csv-import'
+import { manualTransactions } from './services/manual-transactions'
 
 export async function importFromChatDb(chatDbPath: string): Promise<ImportSummary> {
   if (!existsSync(chatDbPath)) throw new Error(`chat.db not found at: ${chatDbPath}`)

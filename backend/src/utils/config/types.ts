@@ -1,6 +1,5 @@
 import type { Account } from '@wealthi/shared'
-import type { AccountId, Currency } from '../types'
-import type { TransferRule } from '../../services/transfer'
+import type { AccountId, Currency, TransferRule } from '../types'
 
 /**
  * Personal data that must never be committed: your accounts and how bank SMS
@@ -33,7 +32,7 @@ export interface RecurringEntry extends Omit<ManualEntry, 'date'> {
 
 /**
  * A CSV file (or one file per month) of transactions that never arrive by SMS.
- * See helpers/csv-loader.ts for how rows become transactions.
+ * See services/csv-import.ts for how rows become transactions.
  */
 export interface CsvImport {
   /** Human-readable id, used in error messages */
