@@ -1,5 +1,5 @@
-import { useAccounts } from '../hooks/useAccounts'
-import { sumGroup } from '../utils/utils'
+import { useAccounts } from '../../../hooks/useAccounts'
+import { sumGroup } from '../../../utils/utils'
 import { BalanceRow } from './BalanceRow'
 import type { AccountBalance } from '@wealthi/shared'
 

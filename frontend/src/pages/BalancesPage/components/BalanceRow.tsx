@@ -1,4 +1,4 @@
-import { money, type RowValues } from '../utils/utils'
+import { money, type RowValues } from '../../../utils/utils'
 
 const CELL = 'whitespace-nowrap px-4 py-3'
 const NUM = `${CELL} text-right tabular-nums`

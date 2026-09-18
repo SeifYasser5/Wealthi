@@ -1,4 +1,4 @@
-import { useCategories, useUpdateTransactionCategory } from '../hooks/useSpending'
+import { useCategories, useUpdateTransactionCategory } from '../../../hooks/useSpending'
 
 /**
  * Assigns a category to a single transaction. The mutation is shared across all

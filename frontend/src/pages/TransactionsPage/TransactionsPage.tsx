@@ -1,9 +1,9 @@
-import { FilterBar } from '../components/FilterBar'
-import { MonthNavigator } from '../components/MonthNavigator'
-import { QueryState } from '../components/QueryState'
-import { TransactionsTable } from '../components/TransactionsTable'
-import { useFilters } from '../hooks/useFilters'
-import { useTransactions } from '../hooks/useTransactions'
+import { FilterBar } from './components/FilterBar'
+import { MonthNavigator } from '../../components/MonthNavigator'
+import { QueryState } from '../../components/QueryState'
+import { TransactionsTable } from './components/TransactionsTable'
+import { useFilters } from '../../hooks/useFilters'
+import { useTransactions } from '../../hooks/useTransactions'
 
 export function TransactionsPage() {
   const { filters, update } = useFilters()

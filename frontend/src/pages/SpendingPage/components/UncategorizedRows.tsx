@@ -1,5 +1,5 @@
 import type { UncategorizedTransactionRow } from '@wealthi/shared'
-import { formatDay, money } from '../utils/utils'
+import { formatDay, money } from '../../../utils/utils'
 import { CategorySelect } from './CategorySelect'
 
 export function UncategorizedRows({ transactions }: { transactions: UncategorizedTransactionRow[] }) {

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { CategoryRow, UncategorizedTransactionRow } from '@wealthi/shared'
-import { money } from '../utils/utils'
+import { money } from '../../../utils/utils'
+import { SpendingBar } from './SpendingBar'
 import { UncategorizedRows } from './UncategorizedRows'
 
 const UNCATEGORIZED = 'Uncategorized'
@@ -25,40 +26,18 @@ export function CategoryCard({
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-center gap-4 px-5 py-4 text-left transition hover:bg-[#e9eaed]"
       >
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className={`font-semibold ${isUncategorized ? 'text-[#9a9ba8]' : 'text-black'}`}>
-                {row.category}
-              </span>
-              <span
-                className={`shrink-0 rounded-md px-1.5 py-0.5 text-xs font-bold tabular-nums ${
-                  isUncategorized ? 'bg-[#dde0e6] text-[#9a9ba8]' : 'bg-[#0666eb]/10 text-[#0666eb]'
-                }`}
-              >
-                {pct.toFixed(1)}%
-              </span>
-            </div>
-            <span className="shrink-0 font-mono text-sm font-medium text-[#6b6d80]">{money(row.total)}</span>
-          </div>
-          <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-[#dde0e6]">
-            <div
-              className={`h-full rounded-full transition-all ${isUncategorized ? 'bg-[#dde0e6]' : 'bg-[#0666eb]'}`}
-              style={{ width: `${pct.toFixed(1)}%` }}
-            />
-          </div>
-          <span className="mt-1 text-xs text-[#9a9ba8]">
-            {isUncategorized ? (
-              <>
-                {uncategorized.length} transaction{uncategorized.length !== 1 ? 's' : ''} to categorize
-              </>
-            ) : (
-              <>
-                {row.merchants.length} merchant{row.merchants.length !== 1 ? 's' : ''}
-              </>
-            )}
-          </span>
-        </div>
+        <SpendingBar
+          label={row.category}
+          badge={`${pct.toFixed(1)}%`}
+          amount={row.total}
+          pct={pct}
+          accent={isUncategorized ? 'muted' : 'blue'}
+          footer={
+            isUncategorized
+              ? `${uncategorized.length} transaction${uncategorized.length !== 1 ? 's' : ''} to categorize`
+              : `${row.merchants.length} merchant${row.merchants.length !== 1 ? 's' : ''}`
+          }
+        />
         <span className="text-[#9a9ba8] text-sm">{open ? '▲' : '▼'}</span>
       </button>
 

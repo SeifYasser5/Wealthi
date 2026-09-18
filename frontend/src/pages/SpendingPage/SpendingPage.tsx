@@ -1,10 +1,11 @@
-import { CategoryCard } from '../components/CategoryCard'
-import { LargeTransactionCard } from '../components/LargeTransactionCard'
-import { MonthNavigator } from '../components/MonthNavigator'
-import { QueryState } from '../components/QueryState'
-import { useFilters } from '../hooks/useFilters'
-import { useSpending } from '../hooks/useSpending'
-import { money } from '../utils/utils'
+import { CategoryCard } from './components/CategoryCard'
+import { CategorySelect } from './components/CategorySelect'
+import { SpendingBar } from './components/SpendingBar'
+import { MonthNavigator } from '../../components/MonthNavigator'
+import { QueryState } from '../../components/QueryState'
+import { useFilters } from '../../hooks/useFilters'
+import { useSpending } from '../../hooks/useSpending'
+import { money } from '../../utils/utils'
 
 export function SpendingPage() {
   const { filters, update } = useFilters()
@@ -55,7 +56,23 @@ export function SpendingPage() {
                       uncategorized={data.uncategorized}
                     />
                   ) : (
-                    <LargeTransactionCard key={`tx-${item.tx.id}`} tx={item.tx} />
+                    <div key={`tx-${item.tx.id}`} className="overflow-hidden rounded-2xl bg-[#f4f5f7] px-5 py-4">
+                      <SpendingBar
+                        label={item.tx.merchant ?? item.tx.account}
+                        badge="large"
+                        amount={item.tx.amount}
+                        pct={item.tx.pct}
+                        accent="orange"
+                        footer={
+                          <>
+                            <span>{item.tx.pct.toFixed(1)}% of total · single transaction</span>
+                            {/* Large rows are uncategorized by definition — they are listed here
+                                instead of inside the Uncategorized bucket, so the dropdown lives here. */}
+                            <CategorySelect transactionId={item.tx.id} />
+                          </>
+                        }
+                      />
+                    </div>
                   ),
                 )}
             </div>

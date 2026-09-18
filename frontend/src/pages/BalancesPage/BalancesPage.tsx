@@ -1,8 +1,8 @@
-import { BalancesTable } from '../components/BalancesTable'
-import { MonthNavigator } from '../components/MonthNavigator'
-import { QueryState } from '../components/QueryState'
-import { useFilters } from '../hooks/useFilters'
-import { useBalances } from '../hooks/useBalances'
+import { BalancesTable } from './components/BalancesTable'
+import { MonthNavigator } from '../../components/MonthNavigator'
+import { QueryState } from '../../components/QueryState'
+import { useFilters } from '../../hooks/useFilters'
+import { useBalances } from '../../hooks/useBalances'
 
 export function BalancesPage() {
   const { filters, update } = useFilters()

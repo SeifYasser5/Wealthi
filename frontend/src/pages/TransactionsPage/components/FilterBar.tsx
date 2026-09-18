@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { useAccounts } from '../hooks/useAccounts'
-import { Select } from './Select'
+import { useAccounts } from '../../../hooks/useAccounts'
+import { Select } from '../../../components/Select'
 import type { AccountId, TransactionType, TransferFilter } from '@wealthi/shared'
 
 interface Props {
@@ -30,12 +30,16 @@ export function FilterBar({
 }: Props) {
   const { accounts } = useAccounts()
   const [text, setText] = useState(merchant)
-  const onMerchantChangeRef = useRef(onMerchantChange)
-  onMerchantChangeRef.current = onMerchantChange
-
-  useEffect(() => {
+  const [prevMerchant, setPrevMerchant] = useState(merchant)
+  if (merchant !== prevMerchant) {
+    setPrevMerchant(merchant)
     setText(merchant)
-  }, [merchant])
+  }
+
+  const onMerchantChangeRef = useRef(onMerchantChange)
+  useEffect(() => {
+    onMerchantChangeRef.current = onMerchantChange
+  })
 
   useEffect(() => {
     if (text === merchant) return
