@@ -1,5 +1,5 @@
-import type { DecodedMessage, DbRow } from '../utils/types'
-import { macDateToJs } from '../utils/helpers'
+import type { DecodedMessage, DbRow } from '../../utils/types'
+import { macDateToJs } from '../../utils/helpers'
 
 /**
  * Extracts the SMS text an iMessage stores in its `attributedBody` blob, in

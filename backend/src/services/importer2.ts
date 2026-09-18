@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { readMessages } from './services/reader'
+import { readMessages } from './ingest/reader'
 import type {
   DbRow,
   StagedTransaction,
@@ -9,17 +9,17 @@ import type {
   RecomputeBalance,
   ImportError,
   ImportSummary,
-} from './utils/types'
-import { ALL_ACCOUNTS, config } from './utils/config'
-import { decode } from './services/decode'
-import { parseWithPatterns } from './services/patterns/parser'
-import { classifyTransfer } from './services/transfer'
-import { toYearMonth, monthRange } from './utils/helpers'
-import { openingFor, upsertAllBalances } from './db/balances'
-import { computeBalance } from './services/balance'
-import { findFromMonth, createAllTransactions } from './db/transactions'
-import { getImportCursor, setImportCursor } from './db/import-state'
-import { prisma } from './db/client'
+} from '../utils/types'
+import { ALL_ACCOUNTS, config } from '../utils/config'
+import { decode } from './ingest/decode'
+import { parseWithPatterns } from './ingest/patterns/parser'
+import { classifyTransfer } from './ingest/transfer'
+import { toYearMonth, monthRange } from '../utils/helpers'
+import { openingFor, upsertAllBalances } from '../db/balances'
+import { computeBalance } from './ingest/balance'
+import { findFromMonth, createAllTransactions } from '../db/transactions'
+import { getImportCursor, setImportCursor } from '../db/import-state'
+import { prisma } from '../db/client'
 
 /**
  * Reads new bank SMS from chat.db, parses them into transactions, and refreshes

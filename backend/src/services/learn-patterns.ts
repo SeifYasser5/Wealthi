@@ -1,10 +1,10 @@
 import { join } from 'node:path'
-import { readMessages } from './services/reader'
-import { decode, DecodeError } from './services/decode'
-import { learnBank } from './services/patterns/learn'
-import { bankOf, loadPatternFiles, mergePatterns, savePatternFile } from './services/patterns/store'
-import { config } from './utils/config'
-import type { DecodedMessage } from './utils/types'
+import { readMessages } from './ingest/reader'
+import { decode, DecodeError } from './ingest/decode'
+import { learnBank } from './ingest/patterns/learn'
+import { bankOf, loadPatternFiles, mergePatterns, savePatternFile } from './ingest/patterns/store'
+import { config } from '../utils/config'
+import type { DecodedMessage } from '../utils/types'
 
 /**
  * Learns SMS patterns from chat.db and merges them into config/patterns/<bank>.json.

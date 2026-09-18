@@ -15,7 +15,7 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
-    "patterns:learn": "ts-node src/learn-patterns.ts"
+    "patterns:learn": "ts-node src/services/learn-patterns.ts"
   },
   "keywords": [],
   "author": "",

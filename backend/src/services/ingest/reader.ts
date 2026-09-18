@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3'
-import { DbRow } from '../utils/types'
+import { DbRow } from '../../utils/types'
 
 // ---------------------------------------------------------------------------
 // Query

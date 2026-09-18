@@ -1,5 +1,5 @@
-import type { ParsedTransaction, TransferRule } from '../utils/types'
-import { config } from '../utils/config'
+import type { ParsedTransaction, TransferRule } from '../../utils/types'
+import { config } from '../../utils/config'
 
 /** Loaded from config/wealthi.json — the merchant strings carry real names. */
 export const TRANSFER_RULES: TransferRule[] = config.transferRules

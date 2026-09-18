@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { config, type CsvImport } from '../utils/config'
-import { toYearMonth } from '../utils/helpers'
-import type { Currency, StagedTransaction, TransactionType } from '../utils/types'
+import { config, type CsvImport } from '../../utils/config'
+import { toYearMonth } from '../../utils/helpers'
+import type { Currency, StagedTransaction, TransactionType } from '../../utils/types'
 
 /**
  * Transactions that live in CSV files instead of bank SMS — e.g. a statement
@@ -19,7 +19,7 @@ import type { Currency, StagedTransaction, TransactionType } from '../utils/type
  * A month whose file doesn't exist yields no rows.
  */
 
-const BACKEND_ROOT = resolve(__dirname, '../..')
+const BACKEND_ROOT = resolve(__dirname, '../../..')
 
 /** All CSV-sourced transactions for one "YYYY-MM", across every configured import. */
 export function loadCsvTransactions(yearMonth: string, imports: CsvImport[] = config.csvImports): StagedTransaction[] {

@@ -2,7 +2,7 @@ import 'dotenv/config'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import app from './app'
-import { importFromChatDb } from './importer'
+import { importFromChatDb } from './services/importer'
 
 const PORT = process.env.PORT || 3000
 

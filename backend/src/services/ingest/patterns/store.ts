@@ -4,7 +4,7 @@ import { compile, type Pattern, type PatternFile } from './pattern'
 import type { Labelled } from './label'
 
 /** config/patterns/<bank>.json — gitignored, next to config/wealthi.json */
-export const PATTERNS_DIR = resolve(__dirname, '../../../config/patterns')
+export const PATTERNS_DIR = resolve(__dirname, '../../../../config/patterns')
 
 /** "ADCB Egypt" → "adcb-egypt" */
 export function bankOf(sender: string): string {

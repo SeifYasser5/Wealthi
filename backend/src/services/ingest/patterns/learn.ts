@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { DecodedMessage } from '../../utils/types'
+import type { DecodedMessage } from '../../../utils/types'
 import { label } from './label'
 import { mask } from './mask'
 import { mineTokens } from './mine'

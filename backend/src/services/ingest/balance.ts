@@ -1,5 +1,5 @@
-import type { AccountId, ParsedTransaction, AccountBalance } from '../utils/types'
-import { round2 } from '../utils/helpers'
+import type { AccountId, ParsedTransaction, AccountBalance } from '../../utils/types'
+import { round2 } from '../../utils/helpers'
 
 /**
  * Computes the AccountBalance for one account in one calendar month.
