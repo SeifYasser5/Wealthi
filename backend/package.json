@@ -7,9 +7,6 @@
     "dev": "nodemon --watch src --ext ts --exec ts-node src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "test": "vitest run --passWithNoTests",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage --passWithNoTests",
     "lint": "eslint src",
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\"",
@@ -39,7 +36,6 @@
     "@types/express": "^5.0.6",
     "@types/node": "^25.9.3",
     "@types/pg": "^8.20.0",
-    "@vitest/coverage-v8": "^4.1.9",
     "eslint": "^10.5.0",
     "eslint-config-prettier": "^10.1.8",
     "nodemon": "^3.1.14",
@@ -47,7 +43,6 @@
     "prisma": "^7.8.0",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.61.1",
-    "vitest": "^4.1.9"
+    "typescript-eslint": "^8.61.1"
   }
 }
