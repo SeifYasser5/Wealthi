@@ -2,10 +2,10 @@ import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { Account } from '@wealthi/shared'
 import type { AccountId } from '../types'
-import type { WealthiConfig } from './types'
-import { ConfigError, validate } from '../validation/config'
+import { z } from 'zod'
+import { WealthiConfigSchema, type WealthiConfig } from './schema'
 
-export type { CsvImport, ManualEntry, RecurringEntry, WealthiConfig } from './types'
+export type { CsvImport, ManualEntry, RecurringEntry, TransferRule, WealthiConfig } from './schema'
 
 export const CONFIG_PATH = resolve(__dirname, '../../../config/wealthi.json')
 
@@ -13,12 +13,9 @@ function load(): WealthiConfig {
   if (!existsSync(CONFIG_PATH)) {
     throw new Error(`Config not found at ${CONFIG_PATH}. Copy config/wealthi.example.json to config/wealthi.json.`)
   }
-  try {
-    return validate(JSON.parse(readFileSync(CONFIG_PATH, 'utf8')))
-  } catch (err) {
-    if (err instanceof ConfigError) throw new Error(`Invalid ${CONFIG_PATH}: ${err.message}`)
-    throw err
-  }
+  const parsed = WealthiConfigSchema.safeParse(JSON.parse(readFileSync(CONFIG_PATH, 'utf8')))
+  if (!parsed.success) throw new Error(`Invalid ${CONFIG_PATH}:\n${z.prettifyError(parsed.error)}`)
+  return parsed.data
 }
 
 export const config: WealthiConfig = load()

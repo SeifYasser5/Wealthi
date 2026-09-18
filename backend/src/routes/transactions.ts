@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express'
 import { queryTransactions, updateCategory } from '../db/transactions'
-import { parseCategoryUpdate, parseTransactionFilters } from '../utils/validation/transactions'
+import { parseCategoryUpdate, parseTransactionFilters } from '../validation/transactions'
 import { route } from '../utils/helpers'
 
 const router = Router()
