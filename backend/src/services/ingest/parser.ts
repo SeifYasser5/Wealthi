@@ -1,7 +1,7 @@
-import type { Currency, DecodedMessage, ParsedTransaction } from '../../../utils/types'
-import { ACCOUNTS, accountFor } from '../../../utils/config'
-import { CURRENCIES, extract, type Pattern, type PatternFile } from './pattern'
-import { loadPatternFiles } from './store'
+import type { Currency, DecodedMessage, ParsedTransaction } from '../../utils/types'
+import { ACCOUNTS, accountFor } from '../../utils/config'
+import { CURRENCIES, extract, type Pattern, type PatternFile } from './patterns/pattern'
+import { loadPatternFiles } from './patterns/store'
 
 /**
  * Parses bank SMS with the enabled patterns in config/patterns.
@@ -93,4 +93,4 @@ export function createPatternParser(files: PatternFile[]): (message: DecodedMess
   }
 }
 
-export const parseWithPatterns = createPatternParser(loadPatternFiles())
+export const parser = createPatternParser(loadPatternFiles())

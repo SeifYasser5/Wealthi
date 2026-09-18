@@ -71,7 +71,7 @@ const TransferRule = z.object({
 
 /**
  * A CSV file (or one file per month) of transactions that never arrive by SMS.
- * See services/csv-import.ts for how rows become transactions.
+ * See utils/helpers/csv-import.ts for how rows become transactions.
  */
 const CsvImport = z
   .object({

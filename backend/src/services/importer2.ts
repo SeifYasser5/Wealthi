@@ -12,7 +12,7 @@ import type {
 } from '../utils/types'
 import { ALL_ACCOUNTS, config } from '../utils/config'
 import { decode } from './ingest/decode'
-import { parseWithPatterns } from './ingest/patterns/parser'
+import { parser } from './ingest/parser'
 import { classifyTransfer } from './ingest/transfer'
 import { toYearMonth, monthRange } from '../utils/helpers'
 import { openingFor, upsertAllBalances } from '../db/balances'
@@ -69,7 +69,7 @@ const stageMessages = (messages: DbRow[]): StageMessages => {
 
     const decoded = decode(raw)
 
-    const parsed = parseWithPatterns(decoded)
+    const parsed = parser(decoded)
     if (!parsed.ok) {
       // Skipped on purpose (a foreign-currency charge) — not an error.
       if (!parsed.skipped) errors.push({ stage: 'parse', decoded, cause: parsed.error })

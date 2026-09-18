@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express'
-import { MAC_EPOCH_OFFSET_MS } from './constants'
+import { MAC_EPOCH_OFFSET_MS } from '../constants'
 
 export function macDateToJs(raw: unknown): Date {
   // better-sqlite3 returns oversized integers as BigInt when safeIntegers(true)

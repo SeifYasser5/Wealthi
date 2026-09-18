@@ -3,7 +3,7 @@ import { readMessages } from './ingest/reader'
 import type { DbRow, StagedTransaction, AccountBalance, StageMessages, RecomputeBalance } from '../utils/types'
 import { ALL_ACCOUNTS, config } from '../utils/config'
 import { decode } from './ingest/decode'
-import { parseWithPatterns } from './ingest/patterns/parser'
+import { parser } from './ingest/parser'
 import { classifyTransfer } from './ingest/transfer'
 import { toYearMonth } from '../utils/helpers'
 import { upsertAllBalances } from '../db/balances'
@@ -11,8 +11,8 @@ import { computeBalance } from './ingest/balance'
 import { createAllTransactions } from '../db/transactions'
 import { prisma } from '../db/client'
 import { ImportError, ImportSummary } from '../utils/types'
-import { loadCsvTransactions } from './ingest/csv-import'
-import { manualTransactions } from './ingest/manual-transactions'
+import { loadCsvTransactions } from '../utils/helpers/csv-import'
+import { manualTransactions } from '../utils/helpers/manual-transactions'
 
 export async function importFromChatDb(chatDbPath: string): Promise<ImportSummary> {
   if (!existsSync(chatDbPath)) throw new Error(`chat.db not found at: ${chatDbPath}`)
@@ -46,7 +46,7 @@ function stageMessages(messages: DbRow[]): StageMessages {
 
     const decoded = decode(raw)
 
-    const parsed = parseWithPatterns(decoded)
+    const parsed = parser(decoded)
     if (!parsed.ok) {
       // Skipped on purpose (a foreign-currency charge) — not an error.
       if (!parsed.skipped) errors.push({ stage: 'parse', decoded, cause: parsed.error })

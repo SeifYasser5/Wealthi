@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { config, type CsvImport } from '../../utils/config'
-import { toYearMonth } from '../../utils/helpers'
-import type { Currency, StagedTransaction, TransactionType } from '../../utils/types'
+import { config, type CsvImport } from '../config'
+import { toYearMonth } from '.'
+import type { Currency, StagedTransaction, TransactionType } from '../types'
 
 /**
  * Transactions that live in CSV files instead of bank SMS — e.g. a statement

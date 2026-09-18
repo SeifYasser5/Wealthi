@@ -9,9 +9,9 @@
  * Manual entries don't carry a bank-reported balance, so reportedBalance is null.
  */
 
-import { config, type ManualEntry, type RecurringEntry } from '../../utils/config'
-import { toYearMonth } from '../../utils/helpers'
-import { StagedTransaction } from '../../utils/types'
+import { config, type ManualEntry, type RecurringEntry } from '../config'
+import { toYearMonth } from '.'
+import { StagedTransaction } from '../types'
 
 function toStaged({ date, ...entry }: ManualEntry): StagedTransaction {
   const transactedAt = new Date(date)
