@@ -4,7 +4,7 @@ import { CategorySelect } from './CategorySelect'
 
 export function UncategorizedRows({ transactions }: { transactions: UncategorizedTransactionRow[] }) {
   if (transactions.length === 0) {
-    return <p className="py-2 text-sm text-[#9a9ba8]">Nothing left to categorize in this bucket.</p>
+    return <p className="py-2 text-sm text-muted">Nothing left to categorize in this bucket.</p>
   }
 
   return (
@@ -16,16 +16,16 @@ export function UncategorizedRows({ transactions }: { transactions: Uncategorize
       <tbody>
         {transactions.map((tx) => (
           <tr key={tx.id} className="group">
-            <td className="rounded-l-lg border-b border-[#dde0e6] px-2 py-1.5 text-[#6b6d80] transition-colors group-last:border-0 group-hover:bg-[#e9eaed]">
-              {tx.merchant ?? <span className="italic text-[#9a9ba8]">no merchant</span>}
-              <span className="ml-2 text-xs text-[#9a9ba8]">
+            <td className="rounded-l-lg border-b border-line px-2 py-1.5 text-subtle transition-colors group-last:border-0 group-hover:bg-surface-hover">
+              {tx.merchant ?? <span className="italic text-muted">no merchant</span>}
+              <span className="ml-2 text-xs text-muted">
                 {formatDay(tx.transactedAt)} · {tx.account}
               </span>
             </td>
-            <td className="border-b border-[#dde0e6] py-1.5 pr-3 text-right font-mono text-black transition-colors group-last:border-0 group-hover:bg-[#e9eaed]">
+            <td className="border-b border-line py-1.5 pr-3 text-right font-mono text-foreground transition-colors group-last:border-0 group-hover:bg-surface-hover">
               {money(tx.amount)}
             </td>
-            <td className="w-px rounded-r-lg border-b border-[#dde0e6] py-1.5 pr-2 transition-colors group-last:border-0 group-hover:bg-[#e9eaed]">
+            <td className="w-px rounded-r-lg border-b border-line py-1.5 pr-2 transition-colors group-last:border-0 group-hover:bg-surface-hover">
               <CategorySelect transactionId={tx.id} />
             </td>
           </tr>

@@ -1,11 +1,12 @@
 import { CategoryCard } from './components/CategoryCard'
 import { CategorySelect } from './components/CategorySelect'
 import { SpendingBar } from './components/SpendingBar'
-import { MonthNavigator } from '../../components/MonthNavigator'
+import { PageHeader } from '../../components/PageHeader'
 import { QueryState } from '../../components/QueryState'
+import { UpdatingIndicator } from '../../components/UpdatingIndicator'
 import { useFilters } from '../../hooks/useFilters'
 import { useSpending } from '../../hooks/useSpending'
-import { money } from '../../utils/utils'
+import { money, plural } from '../../utils/utils'
 
 export function SpendingPage() {
   const { filters, update } = useFilters()
@@ -13,29 +14,29 @@ export function SpendingPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-10">
-      <header className="mb-8 flex items-center justify-between">
-        <h1 className="text-2xl font-bold uppercase text-black">Spending</h1>
-        <MonthNavigator yearMonth={filters.yearMonth} onChange={(ym) => update({ yearMonth: ym })} />
-      </header>
+      <PageHeader
+        title="Spending"
+        yearMonth={filters.yearMonth}
+        onYearMonthChange={(ym) => update({ yearMonth: ym })}
+      />
 
       <QueryState
         query={query}
         isEmpty={(data) => data.categories.length === 0}
         errorMessage="Failed to load spending data"
         emptyMessage="No spending data for this month."
-        surface="bg-[#f4f5f7]"
       >
         {(data) => (
           <>
             <div className="mb-6 flex items-center justify-between">
-              <span className="text-sm text-[#9a9ba8]">
-                {data.categories.length} categor{data.categories.length !== 1 ? 'ies' : 'y'}
+              <span className="text-sm text-muted">
+                {plural(data.categories.length, 'category', 'categories')}
                 {data.largeTransactions.length > 0 && (
-                  <span className="ml-2 text-[#ff9500]">· {data.largeTransactions.length} large</span>
+                  <span className="ml-2 text-warning">· {data.largeTransactions.length} large</span>
                 )}
-                {query.isFetching && <span className="ml-2 text-[#0666eb]">Updating…</span>}
+                <UpdatingIndicator query={query} className="ml-2" />
               </span>
-              <span className="font-semibold text-black">
+              <span className="font-semibold text-foreground">
                 Total <span className="font-mono">{money(data.grandTotal)}</span>
               </span>
             </div>
@@ -56,13 +57,13 @@ export function SpendingPage() {
                       uncategorized={data.uncategorized}
                     />
                   ) : (
-                    <div key={`tx-${item.tx.id}`} className="overflow-hidden rounded-2xl bg-[#f4f5f7] px-5 py-4">
+                    <div key={`tx-${item.tx.id}`} className="overflow-hidden rounded-2xl bg-surface px-5 py-4">
                       <SpendingBar
                         label={item.tx.merchant ?? item.tx.account}
                         badge="large"
                         amount={item.tx.amount}
                         pct={item.tx.pct}
-                        accent="orange"
+                        accent="warning"
                         footer={
                           <>
                             <span>{item.tx.pct.toFixed(1)}% of total · single transaction</span>

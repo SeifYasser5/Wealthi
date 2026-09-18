@@ -6,7 +6,7 @@ import { SpendingPage } from './pages/SpendingPage'
 
 function App() {
   return (
-    <main className="min-h-screen bg-white">
+    <main className="min-h-screen bg-background">
       <NavBar />
       <Routes>
         <Route path="/transactions" element={<TransactionsPage />} />

@@ -3,6 +3,11 @@
 
 import type { AccountBalance, Currency, Transaction, TransactionType, TransferFilter } from '@wealthi/shared'
 
+// ─── Currencies ──────────────────────────────────────────────────────────────
+
+/** Every currency the UI totals by, in display order. The first is the fallback. */
+export const CURRENCIES = ['EGP', 'USD'] as const satisfies readonly Currency[]
+
 // ─── Formatting ──────────────────────────────────────────────────────────────
 
 /** Whole units with thousands separators — the one money format in the UI. */
@@ -19,6 +24,18 @@ export function formatDate(iso: string | null): string {
 /** "18 Feb" — compact date for rows already scoped to one month. */
 export function formatDay(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { day: '2-digit', month: 'short' })
+}
+
+/** "1 transaction" / "3 transactions". Pass `pluralForm` for irregular words. */
+export function plural(count: number, singular: string, pluralForm = `${singular}s`): string {
+  return `${count} ${count === 1 ? singular : pluralForm}`
+}
+
+/** Text color for a signed amount: green above zero, red below, plain at zero. */
+export function amountColor(amount: number): string {
+  if (amount > 0) return 'text-positive'
+  if (amount < 0) return 'text-negative'
+  return 'text-foreground'
 }
 
 // ─── Year-month ("YYYY-MM") ──────────────────────────────────────────────────
@@ -84,6 +101,14 @@ export function netByCurrency(txs: Transaction[], currency: Currency): number | 
   const matching = txs.filter((tx) => tx.currency === currency)
   if (matching.length === 0) return null
   return matching.reduce((sum, tx) => sum + (tx.type === 'credit' ? tx.amount : -tx.amount), 0)
+}
+
+/** Differences below half a cent are rounding, not a real mismatch. */
+const BALANCE_TOLERANCE = 0.005
+
+/** True when a reported-vs-computed discrepancy is within rounding. */
+export function isBalanced(discrepancy: number): boolean {
+  return Math.abs(discrepancy) < BALANCE_TOLERANCE
 }
 
 export function buildComputedBalances(transactions: Transaction[]): (number | null)[] {

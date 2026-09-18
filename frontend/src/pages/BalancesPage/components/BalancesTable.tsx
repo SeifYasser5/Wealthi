@@ -1,5 +1,5 @@
 import { useAccounts } from '../../../hooks/useAccounts'
-import { sumGroup } from '../../../utils/utils'
+import { CURRENCIES, sumGroup } from '../../../utils/utils'
 import { BalanceRow } from './BalanceRow'
 import type { AccountBalance } from '@wealthi/shared'
 
@@ -15,7 +15,7 @@ export function BalancesTable({ balances }: Props) {
   // Totals group by account currency, so they wait for the account list.
   const totals = !isLoaded
     ? []
-    : (['EGP', 'USD'] as const).flatMap((currency) => {
+    : CURRENCIES.flatMap((currency) => {
         const group = balances.filter((bal) => accountCurrency(bal.account) === currency)
         if (group.length === 0) return []
         // A lone account in a currency is already its own total, so drop the tag.
@@ -23,9 +23,9 @@ export function BalancesTable({ balances }: Props) {
       })
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-black bg-white">
+    <div className="overflow-x-auto rounded-2xl border border-foreground bg-background">
       <table className="w-full min-w-3xl border-collapse text-sm">
-        <thead className="text-left text-xs font-semibold uppercase tracking-wide text-black">
+        <thead className="text-left text-xs font-semibold uppercase tracking-wide text-foreground">
           <tr>
             {COLUMNS.map((column, i) => (
               <th key={column} className={`px-4 pt-5 pb-3 ${i === 0 ? '' : 'text-right'}`}>
@@ -34,13 +34,13 @@ export function BalancesTable({ balances }: Props) {
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-[black]">
+        <tbody className="divide-y divide-foreground">
           {balances.map((bal) => (
             <BalanceRow key={bal.account} label={accountLabel(bal.account)} values={bal} variant="account" />
           ))}
         </tbody>
         {totals.length > 0 && (
-          <tbody className="divide-y divide-[#d5e4f7] border-t-2 border-[#d5e4f7] bg-[#e0ecfc]">
+          <tbody className="divide-y divide-primary-line border-t-2 border-primary-line bg-primary-soft">
             {totals.map((total) => (
               <BalanceRow key={total.label} label={total.label} values={total.values} variant="total" />
             ))}

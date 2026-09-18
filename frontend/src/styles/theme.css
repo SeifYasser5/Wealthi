@@ -1,0 +1,44 @@
+/*
+ * Design tokens — the single place the UI's look is defined.
+ *
+ * Each `--color-<name>` becomes Tailwind utilities for every color property:
+ * `text-<name>`, `bg-<name>`, `border-<name>`, `divide-<name>`, and opacity
+ * variants like `bg-<name>/10`. Change a value here and every component using
+ * it follows. Components never hardcode a hex value or use Tailwind's default
+ * palette, which is switched off below so only these names exist.
+ *
+ * Tints are tokens too: use `bg-primary-soft`, never `bg-primary/10`, so every
+ * light variant of a color is the same shade everywhere it appears. Every
+ * `-soft` tint is its base color at 10% over the background.
+ */
+@theme {
+  --color-*: initial;
+
+  /* Base */
+  --color-background: #ffffff;
+  --color-foreground: #000000;
+
+  /* Primary — links, focus rings, active states, highlights. Its tints are
+     derived, so changing --color-primary recolors them too. */
+  --color-primary: #0666eb;
+  --color-primary-soft: color-mix(in srgb, var(--color-primary) 10%, var(--color-background));
+  --color-primary-line: color-mix(in srgb, var(--color-primary) 17%, var(--color-background));
+
+  /* Status — credits and matches, debits and errors, discrepancies and large items */
+  --color-positive: #00d54b;
+  --color-positive-soft: color-mix(in srgb, var(--color-positive) 10%, var(--color-background));
+  --color-negative: #ff3b30;
+  --color-negative-soft: color-mix(in srgb, var(--color-negative) 10%, var(--color-background));
+  --color-warning: #ff9500;
+  --color-warning-soft: color-mix(in srgb, var(--color-warning) 10%, var(--color-background));
+
+  /* Neutrals */
+  --color-subtle: #6b6d80; /* secondary text */
+  --color-muted: #9a9ba8; /* tertiary text, placeholders, empty states */
+  --color-line: #dde0e6; /* dividers, borders, input outlines, bar tracks */
+  --color-surface: #f4f5f7; /* cards, panels, inputs */
+  --color-surface-hover: #e9eaed;
+
+  /* Typography */
+  --font-sans: 'Figtree', ui-sans-serif, system-ui, sans-serif;
+}

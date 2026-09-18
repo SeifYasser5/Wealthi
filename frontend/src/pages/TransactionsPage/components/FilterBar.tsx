@@ -93,7 +93,7 @@ export function FilterBar({
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder="Search merchant…"
-        className="h-10 w-64 rounded-xl bg-[#f0f0f3] px-3 text-sm text-black border border-[#d7d8de] placeholder-[#9a9ba8] focus:border-[#0666eb] focus:outline-none"
+        className="h-10 w-64 rounded-xl bg-surface px-3 text-sm text-foreground border border-line placeholder-muted focus:border-primary focus:outline-none"
       />
     </div>
   )

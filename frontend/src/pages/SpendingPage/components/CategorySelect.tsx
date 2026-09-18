@@ -23,9 +23,9 @@ export function CategorySelect({ transactionId }: { transactionId: string }) {
           const next = e.target.value
           if (next) mutation.mutate({ id: transactionId, category: next })
         }}
-        className={`rounded-lg border px-2 py-1 text-xs text-[#6b6d80] transition disabled:opacity-50 ${
-          failed ? 'border-[#ff3b30]' : 'border-[#dde0e6]'
-        } bg-white hover:border-[#0666eb] focus:border-[#0666eb] focus:outline-none`}
+        className={`rounded-lg border px-2 py-1 text-xs text-subtle transition disabled:text-muted ${
+          failed ? 'border-negative' : 'border-line'
+        } bg-background hover:border-primary focus:border-primary focus:outline-none`}
       >
         <option value="">{pending ? 'Saving…' : 'Categorize…'}</option>
         {categoryData?.categories.map((c) => (
@@ -35,7 +35,7 @@ export function CategorySelect({ transactionId }: { transactionId: string }) {
         ))}
       </select>
       {failed && (
-        <span className="text-[10px] text-[#ff3b30]">
+        <span className="text-[10px] text-negative">
           {mutation.error instanceof Error ? mutation.error.message : 'Failed to save'}
         </span>
       )}

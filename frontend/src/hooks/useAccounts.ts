@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchAccounts } from '../utils/api'
+import { CURRENCIES } from '../utils/utils'
 import type { Account, AccountId } from '@wealthi/shared'
 
 /**
@@ -22,7 +23,7 @@ export function useAccounts() {
       accounts,
       isLoaded: data !== undefined,
       label: (id: AccountId) => byId.get(id)?.label ?? id,
-      currency: (id: AccountId) => byId.get(id)?.currency ?? 'EGP',
+      currency: (id: AccountId) => byId.get(id)?.currency ?? CURRENCIES[0],
       isAccountId: (id: string) => byId.has(id),
     }
   }, [data])

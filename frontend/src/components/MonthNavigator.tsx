@@ -13,18 +13,18 @@ export function MonthNavigator({ yearMonth, onChange }: Props) {
         type="button"
         aria-label="Previous month"
         onClick={() => onChange(shiftYearMonth(yearMonth, -1))}
-        className="text-black transition hover:opacity-60"
+        className="text-foreground transition hover:text-subtle"
       >
         <ChevronLeft size={24} />
       </button>
 
-      <h2 className="w-48 text-center text-xl font-semibold uppercase text-black">{formatYearMonth(yearMonth)}</h2>
+      <h2 className="w-48 text-center text-xl font-semibold uppercase text-foreground">{formatYearMonth(yearMonth)}</h2>
 
       <button
         type="button"
         aria-label="Next month"
         onClick={() => onChange(shiftYearMonth(yearMonth, 1))}
-        className="text-black transition hover:opacity-60"
+        className="text-foreground transition hover:text-subtle"
       >
         <ChevronRight size={24} />
       </button>

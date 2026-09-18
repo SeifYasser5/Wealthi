@@ -1,9 +1,11 @@
 import { FilterBar } from './components/FilterBar'
-import { MonthNavigator } from '../../components/MonthNavigator'
+import { PageHeader } from '../../components/PageHeader'
 import { QueryState } from '../../components/QueryState'
+import { UpdatingIndicator } from '../../components/UpdatingIndicator'
 import { TransactionsTable } from './components/TransactionsTable'
 import { useFilters } from '../../hooks/useFilters'
 import { useTransactions } from '../../hooks/useTransactions'
+import { plural } from '../../utils/utils'
 
 export function TransactionsPage() {
   const { filters, update } = useFilters()
@@ -11,11 +13,11 @@ export function TransactionsPage() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10">
-      <header className="mb-8 space-y-5">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold uppercase text-black">Transactions</h1>
-          <MonthNavigator yearMonth={filters.yearMonth} onChange={(ym) => update({ yearMonth: ym })} />
-        </div>
+      <PageHeader
+        title="Transactions"
+        yearMonth={filters.yearMonth}
+        onYearMonthChange={(ym) => update({ yearMonth: ym })}
+      >
         <FilterBar
           account={filters.account}
           merchant={filters.merchant}
@@ -36,11 +38,11 @@ export function TransactionsPage() {
             update(counterAccount ? { counterAccount, transfer: 'only' } : { counterAccount })
           }
         />
-      </header>
+      </PageHeader>
 
-      <div className="mb-3 flex items-center justify-between text-sm text-[#9a9ba8]">
-        <span>{query.data ? `${query.data.count} transaction${query.data.count === 1 ? '' : 's'}` : ''}</span>
-        {query.isFetching && !query.isLoading && <span className="text-[#0666eb]">Updating…</span>}
+      <div className="mb-3 flex items-center justify-between text-sm text-muted">
+        <span>{query.data ? plural(query.data.count, 'transaction') : ''}</span>
+        <UpdatingIndicator query={query} />
       </div>
 
       <QueryState
