@@ -1,0 +1,18 @@
+{
+  "name": "@wealthi/shared",
+  "version": "0.0.0",
+  "private": true,
+  "description": "API contract types shared by the backend and frontend. Types only \u2014 no runtime code.",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.2"
+  }
+}

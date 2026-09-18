@@ -1,13 +1,8 @@
 import { Router, Request, Response } from 'express'
-import { ACCOUNTS } from '../utils/accounts'
-import type { Account } from '../utils/config'
+import { ACCOUNTS } from '../utils/config'
+import type { AccountsResponse } from '@wealthi/shared'
 
 const router = Router()
-
-export interface AccountsResponse {
-  /** Your accounts in display order, with the label and currency the UI shows. */
-  accounts: Account[]
-}
 
 /**
  * GET /api/accounts

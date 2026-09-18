@@ -1,11 +1,10 @@
 import type { Currency, DecodedMessage, ParsedTransaction } from '../../utils/types'
-import { ACCOUNTS, accountFor } from '../../utils/accounts'
+import { ACCOUNTS, accountFor } from '../../utils/config'
 import { CURRENCIES, extract, type Pattern, type PatternFile } from './pattern'
 import { loadPatternFiles } from './store'
 
 /**
- * Parses bank SMS with the enabled patterns in config/patterns — the
- * config-driven alternative to the per-bank parsers in services/parse/banks.
+ * Parses bank SMS with the enabled patterns in config/patterns.
  *
  * A message is matched against its sender's enabled patterns:
  * - a match → a ParsedTransaction
@@ -87,7 +86,6 @@ export function createPatternParser(files: PatternFile[]): (message: DecodedMess
         counterAccount: null,
         reportedBalance: x.balance,
         transactedAt: message.messageDate,
-        raw: message.text,
         messageGuid: message.guid,
         sourceRowid: message.rowid,
       },

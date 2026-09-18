@@ -1,14 +1,8 @@
 import { Router, Request, Response } from 'express'
+import type { CategoriesResponse } from '@wealthi/shared'
 import { SPENDING_CATEGORIES, UNCATEGORIZED } from '../utils/categories'
 
 const router = Router()
-
-export interface CategoriesResponse {
-  /** Assignable categories, alphabetically ordered — the exact set PATCH accepts. */
-  categories: string[]
-  /** Label the spending breakdown uses for rows with no category; not assignable. */
-  uncategorized: string
-}
 
 /**
  * GET /api/categories

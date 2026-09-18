@@ -25,7 +25,7 @@ export async function upsertBalance(bal: AccountBalance, db: Db = prisma): Promi
     debits: bal.debits,
     credits: bal.credits,
     transfersIn: bal.transfersIn,
-    transfersOut: bal.transfersOut ?? 0,
+    transfersOut: bal.transfersOut,
     closingBalance: bal.closingBalance,
     lastReportedBalance: bal.lastReportedBalance,
     discrepancy: bal.discrepancy,

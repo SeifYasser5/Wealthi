@@ -1,8 +1,7 @@
 import { existsSync } from 'node:fs'
 import { readMessages } from './services/reader'
 import type { DbRow, StagedTransaction, AccountBalance, StageMessages, RecomputeBalance } from './utils/types'
-import { ALL_ACCOUNTS } from './utils/accounts'
-import { config } from './utils/config'
+import { ALL_ACCOUNTS, config } from './utils/config'
 import { decode } from './services/decode'
 import { parseWithPatterns } from './services/patterns/parser'
 import { classifyTransfer } from './services/transfer'
@@ -21,7 +20,7 @@ export async function importFromChatDb(chatDbPath: string): Promise<ImportSummar
   const messages = readMessages(chatDbPath, config.bankSenders, undefined)
   const { transactions, errors, earliest } = stageMessages(messages)
   if (transactions.length === 0 || earliest === null) return { months: 0, totalStored: 0, errors }
-  const { balances, months } = await recomputeBalances(transactions, earliest)
+  const { balances, months } = await recomputeBalances(transactions)
 
   await prisma.$transaction(
     async (db) => {
@@ -63,7 +62,7 @@ function stageMessages(messages: DbRow[]): StageMessages {
   return { transactions, errors, earliest, maxRowid }
 }
 
-async function recomputeBalances(staged: StagedTransaction[], _: string): RecomputeBalance {
+async function recomputeBalances(staged: StagedTransaction[]): RecomputeBalance {
   const stored = manualTransactions
   const byMonth = groupByMonth([...stored, ...staged])
   const months = [...byMonth.keys()].sort().slice(-6)

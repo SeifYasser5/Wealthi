@@ -1,10 +1,8 @@
-/**
- * One of your own accounts. The set is configured, not hardcoded: see
- * `accounts` in config/wealthi.json and ALL_ACCOUNTS in utils/accounts.ts.
- */
-export type AccountId = string
+import type { AccountBalance, AccountId, Currency, TransactionType } from '@wealthi/shared'
 
-export type Currency = 'EGP' | 'USD'
+// Contract types shared with the frontend, re-exported so backend modules keep
+// importing everything from here.
+export type { AccountBalance, AccountId, Currency, TransactionType }
 
 export interface DbRow {
   /** chat.db message.ROWID — monotonic insert order; the incremental import cursor. */
@@ -49,29 +47,16 @@ interface BaseTransaction {
   reportedBalance: number | null
   /** Timestamp from the SMS text (null when the SMS omits it) */
   transactedAt: Date
-  /** Decoded SMS text, preserved verbatim */
-  raw: string
   messageGuid?: string | null
   sourceRowid?: bigint | null
 }
 
-export interface DebitTransaction extends BaseTransaction {
-  type: 'debit'
-}
-
-export interface CreditTransaction extends BaseTransaction {
-  type: 'credit'
-}
-
 /**
- * Discriminated union on `type`. Transfers are not a separate variant: an
- * internal transfer is a debit (money out) or credit (money in) that also
- * carries a non-null `counterAccount`. Test for one with `counterAccount !== null`.
+ * A parsed transaction. Transfers are not a separate variant: an internal
+ * transfer is a debit (money out) or credit (money in) that also carries a
+ * non-null `counterAccount`. Test for one with `counterAccount !== null`.
  */
-export type ParsedTransaction = DebitTransaction | CreditTransaction
-
-/** The direction discriminant on its own: debit = money out, credit = money in. */
-export type TransactionType = ParsedTransaction['type']
+export type ParsedTransaction = BaseTransaction & { type: TransactionType }
 
 /**
  * ParsedTransaction tagged with its calendar month — ready for DB insertion.
@@ -97,22 +82,6 @@ interface TransactionMeta {
 
 /** ParsedTransaction enriched with a DB identity and import timestamp */
 export type Transaction = ParsedTransaction & TransactionMeta
-
-/** Computed balance summary for one account in one calendar month */
-export interface AccountBalance {
-  account: AccountId
-  yearMonth: string
-  openingBalance: number
-  debits: number
-  credits: number
-  transfersIn: number
-  transfersOut?: number
-  closingBalance: number
-  /** Last bank-reported balance seen in SMS for this period */
-  lastReportedBalance: number | null
-  /** closingBalance − lastReportedBalance; null when lastReportedBalance is null */
-  discrepancy?: number | null
-}
 
 export type ImportError = { stage: 'parse'; decoded: DecodedMessage; cause: unknown }
 

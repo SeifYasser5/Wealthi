@@ -1,4 +1,4 @@
-import { VALUE_PATTERNS, asciiDigits, type SlotType } from './mask'
+import { VALUE_PATTERNS, asciiDigits, escape, type SlotType } from './mask'
 
 /**
  * Pattern files — config/patterns/<bank>.json, written by `npm run patterns:learn`
@@ -18,19 +18,22 @@ import { VALUE_PATTERNS, asciiDigits, type SlotType } from './mask'
  * original spacing, so a merchant comes out exactly as the bank sent it.
  */
 
-export type Role =
-  | 'amount'
-  | 'currency'
-  | 'balance'
-  | 'account'
-  | 'merchant'
-  | 'counterparty'
-  | 'description'
-  | 'reference'
-  | 'date'
-  | 'time'
-  /** The slot holding the direction word, for `type: "by-keyword"` */
-  | 'direction'
+/** Every slot role a pattern may name. `direction` holds the direction word, for `type: "by-keyword"`. */
+export const ROLES = [
+  'amount',
+  'currency',
+  'balance',
+  'account',
+  'merchant',
+  'counterparty',
+  'description',
+  'reference',
+  'date',
+  'time',
+  'direction',
+] as const
+
+export type Role = (typeof ROLES)[number]
 
 export interface Pattern {
   /** "<bank>:<hash of the mined template>" — stable across learn runs */
@@ -101,20 +104,7 @@ export function directionOf(text: string): 'debit' | 'credit' | null {
 }
 
 const SLOT_TOKEN = /^\{(\w*):([A-Z]+)\}$/
-const ROLES = new Set<string>([
-  'amount',
-  'currency',
-  'balance',
-  'account',
-  'merchant',
-  'counterparty',
-  'description',
-  'reference',
-  'date',
-  'time',
-  'direction',
-])
-const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const ROLE_NAMES = new Set<string>(ROLES)
 
 export function slotToken(role: Role | null, type: SlotType | 'TEXT'): string {
   return `{${role ?? ''}:${type}}`
@@ -143,7 +133,7 @@ export function compile(pattern: string): Compiled {
       }
       const [, role, type] = slot
       if (!(type in VALUE_PATTERNS)) throw new Error(`unknown slot type "${type}" in pattern: ${pattern}`)
-      if (role && !ROLES.has(role)) throw new Error(`unknown role "${role}" in pattern: ${pattern}`)
+      if (role && !ROLE_NAMES.has(role)) throw new Error(`unknown role "${role}" in pattern: ${pattern}`)
       roles.push((role || null) as Role | null)
       return `(${VALUE_PATTERNS[type as SlotType | 'TEXT']})`
     })

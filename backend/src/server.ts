@@ -24,7 +24,6 @@ app.listen(Number(PORT), HOST, () => {
 
   console.log(`[import] Found ${CHAT_DB_PATH} — starting import...`)
 
-  // TODO: remove openingBalances once testing is done
   importFromChatDb(CHAT_DB_PATH)
     .then(({ months, totalStored, errors }) => {
       console.log(`[import] Done: ${months} months, ${totalStored} transactions stored, ${errors.length} parse errors.`)

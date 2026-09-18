@@ -14,7 +14,7 @@ export interface SpendingTransaction {
  * Every debit (non-transfer) transaction for the month — the raw input to the
  * spending breakdown.
  *
- * Rollups are done in the route rather than with a `groupBy` here because the
+ * Rollups are done in services/spending.ts rather than with a `groupBy` here because the
  * effective category of a row is `category ?? MERCHANT_CATEGORIES[merchant]`,
  * which SQL cannot express. A single month is a few hundred rows at most, so
  * grouping in JS costs nothing and keeps one resolution rule for all callers.

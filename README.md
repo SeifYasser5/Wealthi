@@ -20,9 +20,12 @@ Run these from the repository root unless stated otherwise.
 
 ### 1. Install dependencies
 
+The repo is an npm workspace (`shared`, `backend`, `frontend`), so one install
+from the root covers all three. It needs npm 11 or newer. npm 10 crashes on this
+dependency tree.
+
 ```bash
-cd backend  && npm install && cd ..
-cd frontend && npm install && cd ..
+npm install
 ```
 
 ### 2. Create `backend/.env`

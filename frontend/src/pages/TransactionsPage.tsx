@@ -1,14 +1,13 @@
 import { FilterBar } from '../components/FilterBar'
 import { MonthNavigator } from '../components/MonthNavigator'
+import { QueryState } from '../components/QueryState'
 import { TransactionsTable } from '../components/TransactionsTable'
 import { useFilters } from '../hooks/useFilters'
 import { useTransactions } from '../hooks/useTransactions'
 
 export function TransactionsPage() {
   const { filters, update } = useFilters()
-  const { data, isLoading, isError, error, isFetching } = useTransactions(filters)
-
-  const transactions = data?.transactions ?? []
+  const query = useTransactions(filters)
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10">
@@ -40,23 +39,18 @@ export function TransactionsPage() {
       </header>
 
       <div className="mb-3 flex items-center justify-between text-sm text-[#9a9ba8]">
-        <span>{data ? `${data.count} transaction${data.count === 1 ? '' : 's'}` : ''}</span>
-        {isFetching && !isLoading && <span className="text-[#0666eb]">Updating…</span>}
+        <span>{query.data ? `${query.data.count} transaction${query.data.count === 1 ? '' : 's'}` : ''}</span>
+        {query.isFetching && !query.isLoading && <span className="text-[#0666eb]">Updating…</span>}
       </div>
 
-      {isLoading ? (
-        <div className="rounded-2xl bg-[#f0f0f3] py-16 text-center text-[#9a9ba8]">Loading…</div>
-      ) : isError ? (
-        <div className="rounded-2xl bg-[#ff3b30]/10 py-16 text-center text-[#ff3b30]">
-          {error instanceof Error ? error.message : 'Failed to load transactions'}
-        </div>
-      ) : transactions.length === 0 ? (
-        <div className="rounded-2xl bg-[#f0f0f3] py-16 text-center text-[#9a9ba8]">
-          No transactions match these filters.
-        </div>
-      ) : (
-        <TransactionsTable transactions={transactions} />
-      )}
+      <QueryState
+        query={query}
+        isEmpty={(data) => data.transactions.length === 0}
+        errorMessage="Failed to load transactions"
+        emptyMessage="No transactions match these filters."
+      >
+        {(data) => <TransactionsTable transactions={data.transactions} />}
+      </QueryState>
     </div>
   )
 }

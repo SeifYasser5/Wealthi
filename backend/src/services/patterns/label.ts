@@ -1,5 +1,5 @@
-import type { SlotType } from './mask'
-import { SLOT, isPlaceholder, messageCount, type Template } from './mine'
+import { isPlaceholder, PUNCT, type SlotType } from './mask'
+import { SLOT, messageCount, type Template } from './mine'
 import { compile, directionOf, hasDirectionWord, slotToken, type Pattern, type Role } from './pattern'
 
 /**
@@ -31,7 +31,6 @@ const ACCOUNT_WORDS = /^(account|card\/account|card|حساب|بطاقه|بطاق
 const REFERENCE_WORDS = /^(ref|ref#|id)$/i
 const MERCHANT_WORDS = /^(at|in|@|payment)$/i
 const COUNTERPARTY_WORDS = /^(to|from)$/i
-const PUNCT = /^[,.;:()!?،–\-]+$/
 /** A word of an all-caps Latin name ("JOHN", "O'NEIL") */
 const NAME_WORD = /^[A-Z][A-Z'.\-]+$/
 

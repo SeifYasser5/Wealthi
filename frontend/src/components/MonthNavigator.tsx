@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { formatYearMonth, shiftYearMonth } from '../lib/yearMonth'
+import { formatYearMonth, shiftYearMonth } from '../utils/utils'
 
 interface Props {
   yearMonth: string
@@ -18,9 +18,7 @@ export function MonthNavigator({ yearMonth, onChange }: Props) {
         <ChevronLeft size={24} />
       </button>
 
-      <h2 className="w-48 text-center text-xl font-semibold uppercase text-black">
-        {formatYearMonth(yearMonth)}
-      </h2>
+      <h2 className="w-48 text-center text-xl font-semibold uppercase text-black">{formatYearMonth(yearMonth)}</h2>
 
       <button
         type="button"

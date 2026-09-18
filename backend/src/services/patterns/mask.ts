@@ -54,9 +54,17 @@ const RULES: { replace: string; re: RegExp }[] = [
   { replace: '<NUM>', re: new RegExp(String.raw`(?<![\d.])(?:${NUMBER})`, 'gu') },
 ]
 
-const PLACEHOLDER = /^<(URL|MASKED|CUR|NUM|DATE|TIME|ID)>$/
 // Punctuation peeled off token edges so "ref 55879c13." and "ref 55879c13" match.
 const EDGE_PUNCT = /^([,.;:()!?،–\-]*)(.*?)([,.;:()!?،–\-]*)$/u
+
+/** A token that stands for a value rather than template text: <NUM>, <TEXT>, … */
+export const isPlaceholder = (token: string) => /^<[A-Z]+>$/.test(token)
+
+/** A token that is only punctuation. */
+export const PUNCT = /^[,.;:()!?،–\-]+$/
+
+/** Escapes a literal token for use inside a RegExp. */
+export const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /** Arabic-Indic digits → ASCII. One char for one char, so spacing and merchant text are untouched. */
 export function asciiDigits(text: string): string {
@@ -75,7 +83,7 @@ export function mask(text: string): string[] {
       .replace(/([,،@()])/g, ' $1 ')
       .split(/\s+/)
       .flatMap((word) => {
-        if (PLACEHOLDER.test(word)) return [word]
+        if (isPlaceholder(word)) return [word]
         const [, lead, core, trail] = word.match(EDGE_PUNCT)!
         return [...lead, core, ...trail]
       })

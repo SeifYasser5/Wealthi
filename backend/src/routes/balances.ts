@@ -1,28 +1,27 @@
 import { Router, Request, Response } from 'express'
+import type { BalancesResponse } from '@wealthi/shared'
 import { findBalancesByMonth } from '../db/balances'
+import { isYearMonth, route } from '../utils/helpers'
 
 const router = Router()
-
-const YEAR_MONTH_RE = /^\d{4}-\d{2}$/
 
 /**
  * GET /api/balances
  * Required filter: ?yearMonth=YYYY-MM
  * Returns the stored monthly balance snapshot for each account in that month.
  */
-router.get('/', async (req: Request, res: Response) => {
-  const { yearMonth } = req.query
+router.get(
+  '/',
+  route('failed to query balances', async (req: Request, res: Response) => {
+    const { yearMonth } = req.query
+    if (!isYearMonth(yearMonth)) {
+      return res.status(400).json({ error: 'yearMonth query param is required and must be in YYYY-MM format' })
+    }
 
-  if (typeof yearMonth !== 'string' || !YEAR_MONTH_RE.test(yearMonth)) {
-    return res.status(400).json({ error: 'yearMonth query param is required and must be in YYYY-MM format' })
-  }
-
-  try {
     const balances = await findBalancesByMonth(yearMonth)
-    res.json({ yearMonth, count: balances.length, balances })
-  } catch {
-    res.status(500).json({ error: 'failed to query balances' })
-  }
-})
+    const response: BalancesResponse = { yearMonth, count: balances.length, balances }
+    res.json(response)
+  }),
+)
 
 export default router

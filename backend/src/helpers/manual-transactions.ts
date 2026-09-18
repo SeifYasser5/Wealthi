@@ -20,10 +20,8 @@ function toStaged({ date, ...entry }: ManualEntry): StagedTransaction {
     counterAccount: null,
     transactedAt,
     reportedBalance: null,
-    raw: '',
-    messageDate: transactedAt,
     yearMonth: toYearMonth(transactedAt),
-  } as StagedTransaction
+  }
 }
 
 // Expands to one entry per month from startYearMonth (inclusive) through today.

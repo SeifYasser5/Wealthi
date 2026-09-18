@@ -5,9 +5,9 @@ import type {
   ParsedTransaction,
   StagedTransaction,
   Transaction as OurTransaction,
-  TransactionType,
 } from '../utils/types'
 import type { Prisma, Transaction as PrismaRow } from '@prisma/client'
+import type { TransactionFilters } from '@wealthi/shared'
 
 type Db = Prisma.TransactionClient
 
@@ -37,7 +37,6 @@ function mapRow(row: PrismaRow): OurTransaction {
     counterAccount: row.counterAccount as AccountId | null,
     reportedBalance: toNumber(row.reportedBalance),
     transactedAt: row.transactedAt,
-    raw: row.raw,
     // Derived from counterAccount at extraction time — not a stored column.
     isTransfer: row.counterAccount !== null,
   }
@@ -65,7 +64,6 @@ function toCreateData(
     category: tx.category ?? null,
     reportedBalance: tx.reportedBalance,
     transactedAt: tx.transactedAt,
-    raw: '',
     counterAccount: tx.counterAccount,
     // Present only on SMS-derived rows; null for manual/CSV legs. The unique
     // constraint on messageGuid is what makes re-reads idempotent.
@@ -87,31 +85,11 @@ export async function findFromMonth(fromYearMonth: string, db: Db = prisma): Pro
 }
 
 /**
- * Transfer-ness filter. Internal transfers are exactly the rows with a non-null
- * `counterAccount` — the same rule `mapRow` uses to derive `isTransfer`.
- */
-export type TransferFilter = 'only' | 'exclude'
-
-/** Filters for the transaction listing endpoint. All are optional and AND-combined. */
-export interface TransactionQuery {
-  yearMonth?: string
-  account?: AccountId
-  /** Case-insensitive substring match against the merchant name. */
-  merchant?: string
-  /** 'only' keeps internal transfers; 'exclude' keeps everything else. */
-  transfer?: TransferFilter
-  /** The other side of an internal transfer. Implies `transfer: 'only'`. */
-  counterAccount?: AccountId
-  /** Direction: 'debit' for money out, 'credit' for money in. */
-  type?: TransactionType
-}
-
-/**
  * Queries transactions by any combination of yearMonth, account, merchant,
  * direction, and transfer-ness, ordered by transactedAt descending (createdAt
  * as tiebreak).
  */
-export async function queryTransactions(filters: TransactionQuery, db: Db = prisma): Promise<OurTransaction[]> {
+export async function queryTransactions(filters: TransactionFilters, db: Db = prisma): Promise<OurTransaction[]> {
   const where: Prisma.TransactionWhereInput = {}
   if (filters.yearMonth) where.yearMonth = filters.yearMonth
   if (filters.account) where.account = filters.account

@@ -1,0 +1,9 @@
+{
+  "name": "wealthi",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "backend",
+    "frontend"
+  ]
+}

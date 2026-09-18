@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { fetchBalances } from '../lib/api'
+import { fetchBalances } from '../utils/api'
 
 /**
  * Fetches the per-account balance snapshots for the given month. Keyed on the

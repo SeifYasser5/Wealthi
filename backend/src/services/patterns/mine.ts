@@ -16,11 +16,12 @@
  * <NUM> and <ID> align with each other: an all-digit reference masks as <NUM>.
  */
 
+import { escape, isPlaceholder, PUNCT } from './mask'
+
 export const SLOT = '<TEXT>'
 const BLOCKING = new Set(['<CUR>', '<DATE>', '<TIME>', '<URL>'])
 /** A <MASKED> after one of these is an account/reference, which a slot must not swallow. */
 const ACCOUNT_CONTEXT = /^(ending|account|card|card\/account|no|id|ref|حساب|بطاقه|بطاقة|بـرقم)$/i
-const PUNCT = /^[,.;:()!?،–\-]+$/
 const SEP = '\u0001'
 
 /** Share of literal words two sequences must have in common to merge. */
@@ -43,7 +44,6 @@ export interface Template {
   members: Sequence[]
 }
 
-export const isPlaceholder = (t: string) => /^<[A-Z]+>$/.test(t)
 const isLiteral = (t: string) => !isPlaceholder(t)
 const literalCount = (ts: string[]) => ts.filter(isLiteral).length
 const REFERENCE = new Set(['<NUM>', '<ID>'])
@@ -109,7 +109,6 @@ function generalize(elements: string[], tokens: string[]): { elements: string[];
 }
 
 const range = (from: number, to: number) => Array.from({ length: Math.max(0, to - from) }, (_, k) => from + k)
-const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const regexCache = new Map<string, RegExp>()
 
 /** Regex over SEP-joined tokens; one capture group per slot (0+ tokens, never a blocking placeholder). */

@@ -10,8 +10,7 @@ import type {
   ImportError,
   ImportSummary,
 } from './utils/types'
-import { ALL_ACCOUNTS } from './utils/accounts'
-import { config } from './utils/config'
+import { ALL_ACCOUNTS, config } from './utils/config'
 import { decode } from './services/decode'
 import { parseWithPatterns } from './services/patterns/parser'
 import { classifyTransfer } from './services/transfer'

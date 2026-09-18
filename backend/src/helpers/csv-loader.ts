@@ -105,7 +105,6 @@ export function parseCsvImport(
       merchant: cell(col.merchant) ?? values.merchant ?? null,
       transactedAt,
       reportedBalance: null,
-      raw: '',
       yearMonth,
     })
   })

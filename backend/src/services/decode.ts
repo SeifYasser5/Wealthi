@@ -2,17 +2,17 @@ import type { DecodedMessage, DbRow } from '../utils/types'
 import { macDateToJs } from '../utils/helpers'
 
 /**
- * Successor to decode.ts (kept unchanged for the legacy parsers). Fixes:
+ * Extracts the SMS text an iMessage stores in its `attributedBody` blob, in
+ * either of the two archive formats macOS has used.
  *
- * - streamtyped blobs are detected by their header. decode.ts looks for
- *   "NSString\x01" first, which streamtyped blobs also contain, so they were
- *   decoded as a binary plist: the length prefix leaked into the text ("��+V…")
- *   and archive bytes trailed it.
- * - streamtyped lengths of 128+ bytes are read as 0x81 + int16 / 0x82 + int32
- *   instead of one byte.
- * - the binary plist branch stops at U+FFFD as documented, not at a literal "?".
- *
- * Pattern parsing matches whole messages, so the stray bytes would break it.
+ * Pattern parsing matches whole messages, so stray archive bytes would break
+ * it. Two details earn their code here:
+ * - streamtyped blobs are detected by their header, not by searching for
+ *   "NSString\x01" — they contain that marker too, and reading one as a binary
+ *   plist leaks the length prefix into the text ("��+V…") with archive bytes
+ *   trailing it.
+ * - a streamtyped length of 128+ bytes is 0x81 + int16 or 0x82 + int32, not one
+ *   byte.
  */
 
 const STREAMTYPED_HEADER = Buffer.from('streamtyped', 'latin1')

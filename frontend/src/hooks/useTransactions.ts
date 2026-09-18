@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { fetchTransactions } from '../lib/api'
+import { fetchTransactions } from '../utils/api'
 import type { Filters } from './useFilters'
 
 /**

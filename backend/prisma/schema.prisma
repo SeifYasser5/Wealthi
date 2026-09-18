@@ -41,7 +41,6 @@ model Transaction {
   category        String?
   reportedBalance Decimal?        @map("reported_balance") @db.Decimal(12, 2)
   transactedAt    DateTime        @map("transacted_at") @db.Timestamptz
-  raw             String
   /// Non-null only when type = 'transfer'
   counterAccount  String?         @map("counter_account")
   /// chat.db message.guid this row was derived from. Unique so an overlapping

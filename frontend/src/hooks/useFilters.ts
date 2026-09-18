@@ -1,9 +1,8 @@
 import { useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import type { AccountId } from '../lib/accounts'
 import { useAccounts } from './useAccounts'
-import type { TransactionType, TransferFilter } from '../lib/api'
-import { currentYearMonth, isYearMonth } from '../lib/yearMonth'
+import type { AccountId, TransactionType, TransferFilter } from '@wealthi/shared'
+import { currentYearMonth, isTransactionType, isTransferFilter, isYearMonth } from '../utils/utils'
 
 export interface Filters {
   yearMonth: string
@@ -14,14 +13,6 @@ export interface Filters {
   /** '' means "no transfer filter" — show transfers and non-transfers alike. */
   transfer: TransferFilter | ''
   counterAccount: AccountId | ''
-}
-
-function isTransferFilter(value: string): value is TransferFilter {
-  return value === 'only' || value === 'exclude'
-}
-
-function isTransactionType(value: string): value is TransactionType {
-  return value === 'debit' || value === 'credit'
 }
 
 /**

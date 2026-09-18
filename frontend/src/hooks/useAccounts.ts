@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { fetchAccounts } from '../lib/api'
-import type { Account, AccountId } from '../lib/accounts'
+import { fetchAccounts } from '../utils/api'
+import type { Account, AccountId } from '@wealthi/shared'
 
 /**
  * The configured account list plus lookups over it. Server-side constant, so it
