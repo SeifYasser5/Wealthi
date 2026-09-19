@@ -6,8 +6,7 @@ import type { Minor } from '../../utils/money'
  * Every sum below is integer arithmetic, so it is exact and needs no rounding.
  *
  * Paired inter-account transfers are excluded from `debits` and `credits`
- * and reported separately as `netTransfers`, keeping the summary consistent
- * with the Python reconciler's split between expenses, income, and transfers.
+ * and reported separately as `netTransfers`.
  *
  * Formula:
  *   closingBalance = openingBalance - debits + credits + netTransfers
@@ -17,7 +16,6 @@ import type { Minor } from '../../utils/money'
  * @param yearMonth      "YYYY-MM" label for this period
  * @param openingBalance Balance at the start of the period (from the previous period's closing)
  * @param transactions   ParsedTransactions for this account only (caller must pre-filter)
- * @param pairs          All transfer pairs for this period (spans multiple accounts — not pre-filtered)
  */
 export function computeBalance(
   account: AccountId,

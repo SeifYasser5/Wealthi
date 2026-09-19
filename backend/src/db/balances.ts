@@ -1,13 +1,14 @@
 import { prisma } from './client'
 import { config } from '../utils/config'
 import type { AccountBalance, AccountId, MinorBalance } from '../utils/types'
-import { decimalToMinor, minorToDecimal, type Minor } from '../utils/money'
+import { decimalToMinor, minorToDecimal, minorToNumber, type Minor } from '../utils/money'
 import type { Prisma } from '@prisma/client'
 
 type Db = Prisma.TransactionClient
 type OpeningBalances = Record<AccountId, Minor>
 
 const toDecimal = (m: Minor | null) => (m === null ? null : minorToDecimal(m))
+const toNumber = (d: Prisma.Decimal) => minorToNumber(decimalToMinor(d))
 
 // ---------------------------------------------------------------------------
 // Write — store one computed balance as a monthly_balances row
@@ -76,8 +77,9 @@ export async function upsertAllBalances(balances: MinorBalance[], db: Db): Promi
 
 /**
  * All stored monthly balance snapshots for one calendar month, one per account,
- * ordered by account. Decimal columns are converted to plain numbers to match
- * the `AccountBalance` shape used elsewhere.
+ * ordered by account. Decimal columns are read into minor units and only then
+ * become the plain numbers of the `AccountBalance` API shape, never a float
+ * straight off the Decimal.
  */
 export async function findBalancesByMonth(yearMonth: string, db: Db = prisma): Promise<AccountBalance[]> {
   const rows = await db.monthlyBalance.findMany({
@@ -87,13 +89,13 @@ export async function findBalancesByMonth(yearMonth: string, db: Db = prisma): P
   return rows.map((row) => ({
     account: row.account as AccountId,
     yearMonth: row.yearMonth,
-    openingBalance: row.openingBalance.toNumber(),
-    debits: row.debits.toNumber(),
-    credits: row.credits.toNumber(),
-    transfersIn: row.transfersIn.toNumber(),
-    transfersOut: row.transfersOut.toNumber(),
-    closingBalance: row.closingBalance.toNumber(),
-    lastReportedBalance: row.lastReportedBalance === null ? null : row.lastReportedBalance.toNumber(),
-    discrepancy: row.discrepancy === null ? null : row.discrepancy.toNumber(),
+    openingBalance: toNumber(row.openingBalance),
+    debits: toNumber(row.debits),
+    credits: toNumber(row.credits),
+    transfersIn: toNumber(row.transfersIn),
+    transfersOut: toNumber(row.transfersOut),
+    closingBalance: toNumber(row.closingBalance),
+    lastReportedBalance: row.lastReportedBalance === null ? null : toNumber(row.lastReportedBalance),
+    discrepancy: row.discrepancy === null ? null : toNumber(row.discrepancy),
   }))
 }

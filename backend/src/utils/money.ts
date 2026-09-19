@@ -19,13 +19,18 @@ export type MinorResult = { ok: true; value: Minor } | { ok: false; error: strin
 // by a comma or whitespace ("1,234", "1 234"), and an optional decimal part.
 const AMOUNT = /^(-?)(\d{1,3}(?:[,\s]\d{3})+|\d+)(?:\.(\d+))?$/
 
+// The largest magnitude a DECIMAL(12,2) column (every money column in
+// prisma/schema.prisma) holds: 9 999 999 999.99, as minor units. Anything larger
+// would parse, then make Postgres reject the insert and roll back the import.
+export const MAX_MINOR = 999_999_999_999
+
 /**
  * Parses a decimal amount such as "1,234.5" into minor units (123450) without
  * going through a float: the whole units and the fractional digits, padded to
  * two, are concatenated and read as one integer. Digits must be ASCII (callers
  * normalize Arabic-Indic digits first). Anything else is rejected rather than
  * coerced, including a third decimal place that isn't zero, which minor units
- * cannot hold.
+ * cannot hold, and a magnitude past MAX_MINOR, which the database cannot.
  */
 export function parseMinor(text: string): MinorResult {
   const m = AMOUNT.exec(text)
@@ -33,7 +38,7 @@ export function parseMinor(text: string): MinorResult {
   const [, sign, whole, fraction = ''] = m
   if (/[1-9]/.test(fraction.slice(2))) return { ok: false, error: `more than 2 decimal places in "${text}"` }
   const value = parseInt(whole.replace(/[,\s]/g, '') + fraction.slice(0, 2).padEnd(2, '0'), 10)
-  if (!Number.isSafeInteger(value)) return { ok: false, error: `amount out of range "${text}"` }
+  if (value > MAX_MINOR) return { ok: false, error: `amount out of range "${text}"` }
   // `0 - value` rather than `-value` so "-0.00" is 0, not -0.
   return { ok: true, value: (sign ? 0 - value : value) as Minor }
 }

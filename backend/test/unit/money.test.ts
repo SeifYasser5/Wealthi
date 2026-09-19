@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { ParseError, parser } from '../../src/services/ingest/parser'
 import {
+  MAX_MINOR,
   decimalToMinor,
   minorToDecimal,
   minorToNumber,
@@ -76,6 +78,40 @@ describe('parseMinor', () => {
 
   it('rejects an amount too large to hold exactly', () => {
     expect(parseMinor('99999999999999999')).toEqual({ ok: false, error: 'amount out of range "99999999999999999"' })
+  })
+
+  it('accepts the largest amount a DECIMAL(12,2) column holds', () => {
+    expect(MAX_MINOR).toBe(999999999999)
+    expect(parseMinor('9,999,999,999.99')).toEqual(ok(MAX_MINOR))
+    expect(parseMinor('-9999999999.99')).toEqual(ok(-MAX_MINOR))
+  })
+
+  it('rejects the smallest amount a DECIMAL(12,2) column does not hold', () => {
+    expect(parseMinor('10,000,000,000.00')).toEqual({ ok: false, error: 'amount out of range "10,000,000,000.00"' })
+    expect(parseMinor('-10000000000')).toEqual({ ok: false, error: 'amount out of range "-10000000000"' })
+  })
+
+  describe('through the SMS parser', () => {
+    // The fixture pattern test-bank:card-charge, on the card mapped to an EGP account.
+    const sms = (amount: string) =>
+      parser({
+        rowid: 1n,
+        guid: 'g-1',
+        messageDate: new Date('2026-01-10T12:00:00Z'),
+        text: `Your card ending *2222 was charged EGP ${amount} at ACME GROCERS. Available balance EGP 1.00`,
+        sender: 'Test Bank',
+      })
+
+    it('parses the largest amount that fits', () => {
+      expect(sms('9,999,999,999.99')).toMatchObject({ ok: true, value: { amount: MAX_MINOR } })
+    })
+
+    it('turns the smallest amount that does not fit into a ParseError, not a throw', () => {
+      const r = sms('10,000,000,000.00')
+      if (r.ok || r.skipped) throw new Error('expected a parse error')
+      expect(r.error).toBeInstanceOf(ParseError)
+      expect(r.error.cause).toBe('pattern test-bank:card-charge: amount out of range "10,000,000,000.00"')
+    })
   })
 })
 
