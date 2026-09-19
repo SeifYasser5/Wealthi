@@ -140,3 +140,12 @@ dist
 backend/config/
 backend/data/
 .claude/
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+
+# Test output
+backend/reports/
+backend/.stryker-tmp/
