@@ -1,0 +1,42 @@
+{
+  "bank": "test-bank",
+  "senders": ["Test Bank"],
+  "patterns": [
+    {
+      "id": "test-bank:card-charge",
+      "enabled": true,
+      "type": "debit",
+      "pattern": "Your card ending {account:MASKED} was charged {currency:CUR} {amount:NUM} at {merchant:TEXT} . Available balance {:CUR} {balance:NUM}",
+      "generated": "Your card ending {account:MASKED} was charged {currency:CUR} {amount:NUM} at {merchant:TEXT} . Available balance {:CUR} {balance:NUM}",
+      "reason": "synthetic fixture",
+      "messages": 0
+    },
+    {
+      "id": "test-bank:account-credit",
+      "enabled": true,
+      "type": "credit",
+      "pattern": "Account {account:MASKED} credited with {currency:CUR} {amount:NUM} from {counterparty:TEXT} . Balance {:CUR} {balance:NUM}",
+      "generated": "Account {account:MASKED} credited with {currency:CUR} {amount:NUM} from {counterparty:TEXT} . Balance {:CUR} {balance:NUM}",
+      "reason": "synthetic fixture",
+      "messages": 0
+    },
+    {
+      "id": "test-bank:account-by-keyword",
+      "enabled": true,
+      "type": "by-keyword",
+      "pattern": "Account {account:MASKED} {direction:TEXT} {currency:CUR} {amount:NUM} for {merchant:TEXT} . Balance {:CUR} {balance:NUM}",
+      "generated": "Account {account:MASKED} {direction:TEXT} {currency:CUR} {amount:NUM} for {merchant:TEXT} . Balance {:CUR} {balance:NUM}",
+      "reason": "synthetic fixture",
+      "messages": 0
+    },
+    {
+      "id": "test-bank:disabled",
+      "enabled": false,
+      "type": "debit",
+      "pattern": "Cash withdrawal of {currency:CUR} {amount:NUM} from {account:MASKED}",
+      "generated": "Cash withdrawal of {currency:CUR} {amount:NUM} from {account:MASKED}",
+      "reason": "synthetic fixture — disabled on purpose, must never parse",
+      "messages": 0
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "bankSenders": [
+    "Test Bank"
+  ],
+  "accounts": [
+    {
+      "id": "checking",
+      "label": "Checking",
+      "currency": "EGP"
+    },
+    {
+      "id": "card",
+      "label": "Credit Card",
+      "currency": "EGP"
+    },
+    {
+      "id": "savings_usd",
+      "label": "Savings (USD)",
+      "currency": "USD"
+    }
+  ],
+  "accountSources": {
+    "test-bank:1111": "checking",
+    "test-bank:2222": "card",
+    "test-bank:3333": "savings_usd"
+  },
+  "openingBalances": {
+    "checking": 1000,
+    "card": 0,
+    "savings_usd": 0
+  },
+  "merchantCategories": {
+    "ACME GROCERS": "Groceries"
+  },
+  "extraCategories": [
+    "Rent",
+    "Dining"
+  ],
+  "transferRules": [
+    {
+      "id": "card-payment-out",
+      "account": "checking",
+      "type": "debit",
+      "merchant": "CARD PAYMENT",
+      "counterAccount": "card"
+    },
+    {
+      "id": "card-payment-in",
+      "account": "card",
+      "type": "credit",
+      "merchant": "CARD PAYMENT",
+      "counterAccount": "checking"
+    },
+    {
+      "id": "usd-savings-in",
+      "account": "savings_usd",
+      "type": "credit",
+      "counterAccount": "checking"
+    }
+  ],
+  "recurringTransactions": [],
+  "manualTransactions": [],
+  "csvImports": []
+}

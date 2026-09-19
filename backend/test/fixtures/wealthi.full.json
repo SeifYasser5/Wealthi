@@ -1,0 +1,40 @@
+{
+  "bankSenders": ["Test Bank"],
+  "accounts": [
+    { "id": "checking", "label": "Checking", "currency": "EGP" },
+    { "id": "card", "label": "Credit Card", "currency": "EGP" }
+  ],
+  "accountSources": {
+    "test-bank:1111": "checking",
+    "test-bank:2222": "card"
+  },
+  "openingBalances": { "checking": 100, "card": 0 },
+  "merchantCategories": {},
+  "extraCategories": [],
+  "transferRules": [],
+  "recurringTransactions": [
+    { "type": "debit", "amount": 10, "currency": "EGP", "account": "checking", "merchant": "MONTHLY FEE", "startYearMonth": "2026-02", "dayOfMonth": 1 }
+  ],
+  "manualTransactions": [
+    { "type": "credit", "amount": 5, "currency": "EGP", "account": "checking", "merchant": "CASHBACK", "date": "2026-03-15" }
+  ],
+  "csvImports": [
+    {
+      "id": "conversions",
+      "file": "test/fixtures/csv/{yearMonth}/conversions.csv",
+      "from": "2026-01",
+      "to": "2026-12",
+      "account": "checking",
+      "columns": { "day": "Day", "amount": "Amount" },
+      "values": { "type": "credit", "currency": "EGP", "merchant": "CONVERSION" }
+    },
+    {
+      "id": "card-statement",
+      "file": "test/fixtures/csv/card-statement.csv",
+      "from": "2026-01",
+      "account": "card",
+      "columns": { "date": "Posted Date", "amount": "Amount", "merchant": "Description" },
+      "values": { "currency": "EGP" }
+    }
+  ]
+}
