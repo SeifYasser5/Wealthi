@@ -1,0 +1,14 @@
+{
+  // Type-checks the Playwright specs and config (Playwright itself only transpiles them).
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": ["*.ts", "../playwright.config.ts"]
+}

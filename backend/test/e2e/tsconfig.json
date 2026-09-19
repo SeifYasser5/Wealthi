@@ -1,0 +1,7 @@
+{
+  // For ts-node running seed.ts (see e2e/stack.mjs): CommonJS like src/, with
+  // test/ inside the program so ts-node compiles it instead of Node loading it as ESM.
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "rootDir": "../.." },
+  "include": ["./*.ts", "../fixtures/**/*.ts", "../setup/guard.ts", "../../src"]
+}
