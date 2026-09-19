@@ -8,9 +8,10 @@ export default defineConfig({
   server: {
     proxy: {
       // Forward API calls to the Express backend (default port 3000) so the
-      // frontend can use same-origin relative URLs in dev.
+      // frontend can use same-origin relative URLs in dev. API_PROXY_TARGET
+      // points it elsewhere — the Playwright suite runs its own backend.
       '/api': {
-        target: 'http://localhost:3000',
+        target: process.env.API_PROXY_TARGET ?? 'http://localhost:3000',
         changeOrigin: true,
       },
     },
