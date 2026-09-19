@@ -1,150 +1,259 @@
 # Wealthi
 
-Turns bank SMS notifications (received as iMessages) into a structured financial
-ledger: a local Postgres database of transactions, internal transfers and
-monthly balance snapshots, with a small React reader on top.
+Wealthi turns bank SMS notifications, as they arrive in the macOS Messages database (`chat.db`), into a structured ledger in Postgres: one row per transaction, internal transfers tagged, and monthly balance snapshots reconciled against the balance the bank reports. It learns each bank's message templates from the message history, then parses only messages that exactly match a template a person has approved. It handles English and Arabic templates, in EGP and USD. It is a personal tool, built for one user's own bank messages and accounts.
 
-Everything personal — your accounts, opening balances, merchant categories,
-transfer rules and the SMS templates your banks use — lives in gitignored config
-files. Nothing in this repo is specific to any bank or account.
+**No model does this work.** Template inference is a deterministic algorithm over the message corpus: value masking, longest-common-subsequence clustering, and rule-based slot labelling. There is no LLM, no model call, and no external inference service anywhere in the repo. No model API or HTTP client appears in `backend/src` or in any `package.json` dependency. The only network reference in the app is a Google Fonts link in `frontend/index.html`.
 
-## Requirements
+## Design stance: correctness over coverage
 
-- Node.js 20+ and npm
-- Docker (for the Postgres container)
-- macOS, with your bank SMS in Messages
+The pipeline never guesses.
 
-## Setup
+- **Whole-message matches only.** Each pattern compiles to a regex anchored at both ends. A message is parsed only if it matches in full. When several patterns match, the one with the most literal tokens wins.
+- **No fuzzy matching.** There is no edit distance, no similarity scoring, and no partial extraction.
+- **Unmatched means error.** A message that matches no enabled pattern becomes a parse error in the import summary and is never guessed at. The import reports the error count.
+- **Humans enable patterns.** Newly inferred patterns are written disabled, and the parser loads only enabled ones. No inferred template can affect the ledger until someone enables it by hand.
 
-Run these from the repository root unless stated otherwise.
+The tradeoff: lower automatic coverage and real manual work, accepted deliberately, because a wrong extraction in a financial ledger is worse than no extraction.
 
-### 1. Install dependencies
+## Architecture
 
-The repo is an npm workspace (`shared`, `backend`, `frontend`), so one install
-from the root covers all three. It needs npm 11 or newer. npm 10 crashes on this
-dependency tree.
+```
+chat.db (read-only)
+  |
+  v
+read -------> decode -------> parse ----------> classify -------> recompute -------> persist
+reader.ts     decode.ts       parser.ts         transfer.ts       importer.ts        importer.ts
+bank senders  text column or  enabled patterns  config rule       + balance.ts       one Prisma transaction:
+only          attributedBody  exact match       table             last 6 months      delete, insert, upsert
+                                 |
+                                 +--> parse errors (count in import summary)
 
-```bash
-npm install
+offline: npm run patterns:learn   chat.db -> mask -> mine -> label -> config/patterns/<bank>.json (disabled)
 ```
 
-### 2. Create `backend/.env`
+The import runs once, when the server starts (`backend/src/server.ts`), through `services/importer.ts`, the currently wired development importer. There is no HTTP endpoint and no npm script that runs it. If `chat.db` is missing, the server skips the import and serves what is already in Postgres.
 
-The backend needs `DATABASE_URL`. It is not created for you:
+**Read.** `services/ingest/reader.ts` opens `chat.db` with better-sqlite3, `readonly: true`. It selects messages whose sender handle is listed in `bankSenders` in config, ordered by date and ROWID. Messages from other senders are never read.
 
-```bash
-cat > backend/.env <<'ENV'
-DATABASE_URL=postgresql://wealthi:wealthi_secret@127.0.0.1:5432/wealthi_db
-ENV
+**Decode.** `services/ingest/decode.ts` uses the `text` column, or else extracts the text from the `attributedBody` blob (streamtyped or NSKeyedArchiver). It converts the Mac epoch date. A message with no text throws `DecodeError`.
+
+**Parse.** `services/ingest/parser.ts` looks up the sender's enabled patterns and calls `extract()` in `services/patterns/pattern.ts`. It checks direction, amount, currency and account, maps the source key `<bank>:<last 4 digits>` to a configured account, and compares the message currency with the account's currency. Every outcome is explicit: a transaction, a skip, or a `ParseError`.
+
+**Classify transfers.** `services/ingest/transfer.ts` sets `counterAccount` from `transferRules` in config. A transfer is a tag on a normal debit or credit, set by a rule table, not by matching amounts and dates.
+
+**Recompute balances.** `recomputeBalances` in `services/importer.ts` merges the parsed rows with manual, recurring and CSV entries from config, keeps the last 6 months, and calls `computeBalance` (`services/ingest/balance.ts`) per account per month.
+
+**Persist.** `services/importer.ts` writes everything in one `prisma.$transaction`: delete both tables, insert transactions (`db/transactions.ts`), upsert monthly balances (`db/balances.ts`). The server then logs the month count, the stored count, and the error count.
+
+## Template inference
+
+`npm run patterns:learn` (`backend/src/services/learn-patterns.ts`) reads every message from the configured bank senders and decodes it. Undecodable messages are counted and skipped. Messages are grouped by bank: sender handles that normalize to the same lowercase slug share one corpus and one pattern file. `learnBank` (`services/patterns/learn.ts`) then runs three steps on each corpus.
+
+### 1. Mask (`services/patterns/mask.ts`)
+
+Values that can be recognized without knowing any template are replaced by typed placeholders, so that what remains is template text plus free text such as merchant names.
+
+- Arabic-Indic digits are normalized and whitespace is collapsed.
+- Ordered regex rules replace values with `<URL> <MASKED> <CUR> <NUM> <DATE> <TIME> <ID>`. The currency set is `EGP|USD|EUR|جم|دولار`.
+- The result is tokenized. Messages with identical masked token sequences are grouped, so each distinct sequence is mined once, with its message count.
+
+### 2. Mine (`services/patterns/mine.ts`)
+
+Mining turns the masked sequences into templates with typed gaps.
+
+- **Cluster.** Sequences are processed most frequent first, then by length. Each one first tries to fit an existing template (the template compiled to a regex). Otherwise it merges into the best-scoring template, or starts a new one.
+- **Compare.** The merge score is a longest common subsequence over tokens, computed with a DP table in a flat `Uint16Array`. Tokens are equal only on exact match, except that `<NUM>` and `<ID>` are treated as equal.
+- **Threshold.** A merge needs at least 2 matched literal tokens and a literal overlap of at least 0.6 (`MIN_LITERAL_OVERLAP`).
+- **Slots.** Every gap between aligned tokens becomes a `<TEXT>` slot, with at most 4 slots per template. Aligned `<NUM>`/`<ID>` mismatches become `<ID>`.
+- **Blocking rules.** A gap may not absorb a `<CUR>`, `<DATE>`, `<TIME>` or `<URL>`, or a `<MASKED>` that follows an account word. This keeps amounts and account numbers out of merchant fields.
+- **Variant splitting.** If a slot's first or last word takes only 2 or 3 distinct values, each seen in at least 2 sequences, the template is split on that word and each part is mined again. Recursion stops at depth 8. This separates template variants from free text.
+
+The output is a list of templates, each with its member sequences, sorted by message count.
+
+### 3. Label (`services/patterns/label.ts`)
+
+Labelling decides which templates are transactions and what each slot means.
+
+- **Drop non-transactions.** Templates containing ignore words (declined, OTP, password, statement and others, in English and Arabic) are dropped.
+- **Direction.** Direction comes from debit or credit words in the template's literal text. Failing that, it comes from the values of a TEXT slot, which produces a pattern of type `by-keyword`. A template with no direction is dropped.
+- **Roles by preceding word.** Each slot first gets a role from the word before it (`roleByContext`).
+- **Roles by observed values.** Slots still unlabelled get a role from the values they took across the corpus (`roleByValues`). A 3 to 4 digit value with at most 3 distinct values is an account. A value that is at least 90% distinct over 3 or more messages is a reference.
+- **Amount required.** A template with no `amount` slot is dropped.
+- **Review notes.** Doubts are written into a `review` list: partial match, no account slot, seen once, or an unlabelled TEXT slot.
+
+Each pattern's id is `<bank>:` plus the first 10 hex characters of the SHA-1 of the mined template elements. Patterns are written in `{role:TYPE}` syntax, where a slot with no role (`{:CUR}`) must be present but is not extracted.
+
+### Worked example
+
+These values are asserted in the tests.
+
+`backend/test/unit/learn-patterns.test.ts` runs the real CLI over a synthetic `chat.db`. The corpus holds five card charges of this shape with different merchants and amounts, plus an OTP message, a message with no decodable text, and a message from an unlisted sender:
+
+```
+Your card ending *2222 was charged EGP 1.00 at ACME. Available balance EGP 900.00
+Your card ending *2222 was charged EGP 2.00 at CITY CAFE. Available balance EGP 899.00
 ```
 
-Use `127.0.0.1` rather than `localhost`: the database is published on IPv4
-loopback only, and `localhost` may resolve to IPv6 `::1` first and fail to
-connect. If you change the credentials here, change them in `docker-compose.yml`
-too (or set `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` in your
-environment before starting the container).
+The CLI writes exactly one pattern, `enabled: false`, `type: 'debit'`, `messages: 5`:
 
-### 3. Create your private config
-
-```bash
-cp backend/config/wealthi.example.json backend/config/wealthi.json
+```
+Your card ending {account:MASKED} was charged {currency:CUR} {amount:NUM} at {merchant:TEXT} . Available balance {:CUR} {balance:NUM}
 ```
 
-Then edit `backend/config/wealthi.json`. At minimum set:
+Extraction of a pattern of the same shape is asserted in `backend/test/unit/pattern.test.ts`. The pattern `Card {account:MASKED} charged {currency:CUR} {amount:NUM} at {merchant:TEXT} . Balance {:CUR} {balance:NUM}`, run against
 
-- `bankSenders` — the sender ID each bank texts from, exactly as Messages shows
-  it (a short name like `"MyBank"`, or a phone number)
-- `accounts` — your own accounts, with an id, a display label and a currency
-- `accountSources` — maps a bank-level source key (`"<bank>:<last 4 digits>"`)
-  to one of your account ids
-- `openingBalances` — the starting balance of each account
-
-`merchantCategories`, `extraCategories`, `transferRules`,
-`recurringTransactions`, `manualTransactions` and `csvImports` are optional and
-can start empty. This file is gitignored and never leaves your machine.
-
-### 4. Copy your iMessage database
-
-```bash
-mkdir -p backend/data
-cp ~/Library/Messages/chat.db backend/data/chat.db
+```
+Card *4321 charged EGP 1,234.50 at ACME GROCERS. Balance EGP 10,000.00
 ```
 
-This needs Full Disk Access for your terminal
-(System Settings → Privacy & Security → Full Disk Access). The copy is read
-only — Wealthi never writes to it. Set `IMESSAGE_DB_PATH` to keep it elsewhere.
+yields:
 
-### 5. Start Postgres and create the schema
+```
+patternId:   bank:charge
+type:        debit
+amount:      '1,234.50'    (parseMinor: 123450)
+currency:    EGP
+balance:     '10,000.00'
+merchant:    ACME GROCERS
+accountKey:  bank:4321
+reference:   null
+```
+
+Amounts leave `extract()` as raw text. The parser turns them into integer minor units (see [Ledger correctness](#ledger-correctness)), and `accountKey` is mapped to an account through `accountSources` in config.
+
+## Template lifecycle and format changes
+
+A pattern's id is a hash of its mined elements. When a sender changes format, the next learn run mines a new pattern with a new id, which is written disabled. The previous pattern stays in the same file, flagged `missing`, and keeps its `enabled` state.
+
+Transactions are not bound to the pattern that parsed them. The live importer rebuilds the whole ledger from the currently enabled patterns on every run, so disabling a pattern removes its historical rows.
+
+## Ledger correctness
+
+**Amounts.**
+- Stored in Postgres as `DECIMAL(12,2)`: transaction amounts, reported balances, and every monthly balance column.
+- In memory, money is integer minor units (`Minor` in `backend/src/utils/money.ts`, 12.34 becomes 1234).
+- `parseMinor` turns message and CSV text into `Minor` directly: it joins the whole-unit digits and the fraction padded to two places and calls `parseInt` once. No float is involved.
+- All balance and spending arithmetic is integer. `minorToDecimal` produces an exact two-place string only at the database write boundary.
+- Amounts are always positive. Direction lives in a separate `debit`/`credit` column.
+
+**Malformed amounts are rejected, not coerced.** `parseMinor` accepts an optional `-`, plain digits or groups of three separated by comma or whitespace, and an optional decimal part. It rejects a non-zero third decimal place and anything outside the `DECIMAL(12,2)` column's range. In the parser a malformed amount or balance is a `ParseError`, not a rounded number, so an out-of-range amount becomes a `ParseError` like any other malformed value instead of failing at insert. In CSV import it throws. A sub-cent amount in config fails validation.
+
+**Currency.** Each transaction carries a currency enum (`EGP | USD`), and each account's currency is set in config. There is no FX. A message whose currency differs from its account's currency is skipped, not converted, and the skip is not recorded. `EUR` is recognized by the pattern tokens but is not in the enum, so EUR messages are always skipped.
+
+**Atomic persist.** The whole persist step runs in one Prisma interactive transaction (120 s timeout): delete `monthly_balances`, delete `transactions`, insert transactions, upsert balances. Parsing and balance math happen before it. If nothing parses, the importer returns before touching the database.
+
+**Idempotency by full replacement.** Reimport is idempotent because the tables are emptied and refilled, not because of a content hash or an upsert. Rerunning an import produces the same row count (`pipeline.test.ts`). `message_guid` carries a unique constraint.
+
+**Balance cascade.**
+- Every import fully recomputes the last 6 months that have data.
+- `openingBalances` in config seeds the first month of that window. Each month's closing becomes the next month's opening.
+- `closing = opening - debits - transfersOut + credits + transfersIn`.
+- Each snapshot stores a `discrepancy`: the computed closing minus the last balance the bank reported by SMS. It is a reconciliation check the computation can fail.
+- Manual, recurring and CSV entries count toward balances but are not inserted into `transactions`, so the transaction and spending views do not show them.
+- Months older than the window keep their transactions but get no snapshot.
+
+## Tests
+
+All test data is synthetic. Figures measured on 2026-09-19 with Node 22:
+
+| Suite | Result |
+|---|---|
+| Backend, unit and integration (Postgres via Testcontainers) | 25 files, 396 cases: 391 pass, 5 are expected failures (`it.fails`) |
+| Frontend (Vitest, jsdom, MSW) | 8 files, 74 pass |
+| Playwright over the real stack | 2 files, 8 pass |
+
+v8 coverage:
+
+| Suite | Statements | Branches | Functions | Lines |
+|---|---|---|---|---|
+| Backend (`src/**`) | 99.55% | 97.25% | 100% | 99.89% |
+| Frontend | 100% | 100% | 100% | 100% |
+
+Stryker mutation testing is configured but was not run for these figures.
+
+Covered areas:
+
+- **Inference.** Masking, LCS clustering, slot blocking and variant splitting (`mask-mine.test.ts`), labelling (`label.test.ts`), `learnBank` and stable ids (`learn.test.ts`), the CLI end to end (`learn-patterns.test.ts`), and pattern merging (`store.test.ts`).
+- **Extraction.** `compile`, `extract` and specificity (`pattern.test.ts`), parser results and rejections (`parser.test.ts`), stored values end to end (`pipeline.test.ts`).
+- **The unmatched path.** A disabled pattern never parses (`parser.test.ts`). The import summary holds the expected errors (`pipeline.test.ts`). The logged error count is asserted in `server.test.ts`.
+- **The balance cascade.** `balance.test.ts`, `pipeline.test.ts`, `importer-window.test.ts`, `importer2.test.ts`, `db.test.ts`, and `e2e/ledger.spec.ts`.
+- **Idempotent reimport.** A second live import yields the same row count (`pipeline.test.ts`).
+- **Money parsing.** `parseMinor` separators, padding, rejections and range, plus every conversion in `money.ts` (`money.test.ts`, 35 cases).
+
+## Decisions
+
+**Inferred templates instead of hand-written per-bank parsers.**
+Rejected: a parser module per bank. An earlier hardcoded parser (`services/parse/index.ts`) was removed.
+Why: a new bank or a changed format is handled by a learn run and a review, not by new code.
+Cost: the learner's word lists and thresholds are hardcoded, and cover English and Arabic only.
+
+**Exact whole-message matching instead of fuzzy matching.**
+Rejected: similarity scoring, edit distance, or partial extraction.
+Why: a message either fits a reviewed template or becomes an error, so a near-match never becomes a guessed transaction.
+Cost: any format change stops parsing for that template until a new pattern is enabled.
+
+**Integer minor units in memory against a `DECIMAL(12,2)` column, instead of floats end to end.**
+Rejected: parsing with `parseFloat` and rounding arithmetic to two places.
+Why: text goes to an integer with no float step, sums are exact, and malformed or sub-cent values are rejected instead of rounded.
+Cost: conversions at every boundary.
+
+**Full rebuild during development, incremental import once patterns settle.**
+Rejected: switching to the incremental cursor importer (`importer2.ts`) before the pattern set is settled.
+Why: every change to the enabled patterns requires re-parsing the whole history, which full replacement does by construction and an incremental cursor does not.
+Cost: row ids regenerate on every start, manual categories are lost, and disabling a pattern deletes its history. All three go away when `importer2` takes over.
+
+**Transfers tagged by a config rule table instead of inferred.**
+Rejected: heuristic pairing by matching amounts and dates across accounts.
+Why: a rule in `transferRules` is deterministic and auditable, and a mispaired transfer would corrupt two accounts' balances at once.
+Cost: every transfer route needs a config entry, and an unconfigured transfer stays an ordinary debit or credit.
+
+## Known defects
+
+Each known defect is encoded as a failing test (`it.fails`) rather than a comment, so the suite fails loudly if one is silently fixed or forgotten.
+
+- **Transfer split disabled.** `if (false) transfersOut += …` in `balance.ts` counts outgoing transfers as debits. Closing balances are unaffected. Pinned by `test/unit/balance.test.ts:65`.
+- **Uncaught `DecodeError` in the live importer.** One message with no decodable text aborts the whole import in `importer.ts`. Pinned by `test/integration/pipeline.test.ts:117`.
+- **Uncaught `DecodeError` in the cursor importer.** The same failure in `importer2.ts`. Pinned by `test/integration/importer2.test.ts:131`.
+- **Missing `skipDuplicates`.** `createAllTransactions` documents it but never passes it to `createMany`, so `importer2` fails with a unique violation on a re-read message. That is intended: chat.db ROWIDs are monotonic and the cursor only advances, so a duplicate `message_guid` means the cursor or the read logic is wrong, and it should roll back loudly rather than be skipped. Outstanding: the docstring in `db/transactions.ts` and the comment in `schema.prisma` still describe skipping, and the test still pins this as a failure. Pinned by `test/integration/importer2.test.ts:122`.
+- **Merchant baked into a label.** A single-word merchant can split off into a `by-keyword` pattern with the merchant fixed as literal text. Pinned by `test/unit/label.test.ts:150`.
+
+## Scope
+
+This tool does what its single user needs and stops there. The defects above and the gaps below are known, and deferred by choice rather than undiscovered.
+
+- **Unmatched queue.** Unmatched messages are a count in the import summary, not a durable store or a review UI. Their text stays only in `chat.db`.
+- **Pattern review.** Enabling a pattern means editing a JSON file by hand. Nothing records who reviewed a pattern or when.
+- **Two importers.** `services/importer2.ts` is the intended importer: an incremental cursor reads only new messages and recomputes only the affected months. Its design is settled. It is not wired yet because patterns are still being learned and enabled, and every change to the enabled set needs the whole history re-parsed, which `services/importer.ts` does by rebuilding the ledger on every run. `importer2` takes over once the pattern set is settled. Manual, recurring and CSV entries are left out of it on purpose while that part of the design is reworked; porting them is not a blocker.
+- **Manual categories.** Categories set through the API do not survive the rebuild, which runs on every server start.
+- **Format changes.** A mid-history sender format change has no end-to-end test.
+- **Demo.** There is no seeded demo path, so running the app requires the user's own message database.
+- **Review depth.** Parts of the frontend and API surface were AI generated for speed and were not reviewed line by line. The ingestion pipeline, pattern inference and ledger logic were designed and reviewed deliberately.
+
+## Running it
+
+Requires macOS and a copy of your own iMessage `chat.db`. The copy lives in `backend/data/`, which is gitignored, and is opened read-only; it never leaves the machine.
+
+There is no seeded demo yet. Without your own message database you can run the test suite, but not the app.
 
 ```bash
+nvm use 22
+npx npm@11 install                                   # from the repo root
 docker compose up -d
+# create backend/.env with DATABASE_URL for the Postgres in docker-compose.yml
+cp backend/config/wealthi.example.json backend/config/wealthi.json   # then fill it in
 cd backend && npm run db:push
+cp ~/Library/Messages/chat.db data/chat.db
+npm run patterns:learn          # then set "enabled": true in config/patterns/<bank>.json
+npm run dev                     # API on http://127.0.0.1:3000, imports on start
+cd ../frontend && npm run dev   # http://localhost:5173
 ```
 
-### 6. Learn your banks' SMS patterns
+`npm run test:e2e` from the repo root runs Playwright against a throwaway Postgres seeded from a synthetic `chat.db`, and tears it down afterwards. It needs Docker.
 
-```bash
-cd backend && npm run patterns:learn
-```
+## Reading guide
 
-This reads your messages and writes a pattern file per bank to
-`backend/config/patterns/<bank>.json` (gitignored). New patterns are added
-**disabled** — open each file, check that the extracted fields look right, and
-set `"enabled": true` on the ones you want. Until a pattern is enabled its
-messages are reported as parse errors and no transaction is created. Re-run this
-command whenever a bank changes a template; your edits and flags are preserved.
-
-### 7. Run it
-
-```bash
-cd backend  && npm run dev     # http://127.0.0.1:3000
-cd frontend && npm run dev     # http://localhost:5173
-```
-
-The backend imports from `chat.db` on startup and prints a summary. The Vite dev
-server proxies `/api` to the backend, so open the frontend URL.
-
-## Environment variables
-
-Only `DATABASE_URL` is required. All of these go in `backend/.env`:
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `DATABASE_URL` | — | Postgres connection string (required) |
-| `PORT` | `3000` | Backend port |
-| `HOST` | `127.0.0.1` | Bind address. The API is unauthenticated — widen this only if you know what you are doing |
-| `IMESSAGE_DB_PATH` | `backend/data/chat.db` | Where to read messages from |
-| `CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Comma-separated allowed origins |
-
-## Common commands
-
-```bash
-# backend/
-npm run dev              # dev server with hot reload
-npm run patterns:learn   # re-learn SMS patterns from chat.db
-npm run db:push          # sync the Prisma schema to Postgres
-npm run db:studio        # browse the database
-npm run lint
-npm run format
-
-# frontend/
-npm run dev
-npm run build
-npm run lint
-```
-
-## Troubleshooting
-
-**`Config not found at .../config/wealthi.json`** — step 3 was skipped.
-
-**`Can't reach database server`** — the container is not up (`docker compose ps`),
-or `DATABASE_URL` uses `localhost` instead of `127.0.0.1`.
-
-**`No chat.db found ... skipping auto-import`** — step 4 was skipped, or the path
-in `IMESSAGE_DB_PATH` is wrong.
-
-**The import finds messages but stores nothing** — you have no enabled patterns
-yet. Run `npm run patterns:learn` and enable the ones that look correct (step 6).
-
-**`no account mapped for source "<bank>:1234"`** — add that key to
-`accountSources` in `backend/config/wealthi.json`.
+1. `backend/src/services/patterns/mine.ts`: LCS clustering with typed slot blocking and recursive variant splitting. The core of template inference.
+2. `backend/src/services/patterns/label.ts`: turns mined templates into typed patterns from context words and value distributions, and writes the review notes.
+3. `backend/src/services/patterns/pattern.ts`: the `{role:TYPE}` format, its compiler, and the specificity-ranked whole-message `extract()`.
+4. `backend/src/services/ingest/parser.ts`: the enabled-only gate and the explicit match, skip and error results.
+5. `backend/test/integration/pipeline.test.ts` with `backend/test/fixtures/messages.ts`: the live pipeline end to end on a synthetic `chat.db`, checked against hand-derived balances.
