@@ -140,17 +140,20 @@ Transactions are not bound to the pattern that parsed them. The live importer re
 
 **Currency.** Each transaction carries a currency enum (`EGP | USD`), and each account's currency is set in config. There is no FX. A message whose currency differs from its account's currency is skipped, not converted, and the skip is not recorded. `EUR` is recognized by the pattern tokens but is not in the enum, so EUR messages are always skipped.
 
-**Atomic persist.** The whole persist step runs in one Prisma interactive transaction (120 s timeout): delete `monthly_balances`, delete `transactions`, insert transactions, upsert balances. Parsing and balance math happen before it. If nothing parses, the importer returns before touching the database.
+**Atomic persist.** In `importer2.ts`, a run inserts only the newly read transactions, upserts the monthly balance snapshots for the months it recomputed, and advances the import cursor, all inside one Prisma interactive transaction (120 s timeout). The cursor can never move without the rows it covers: a rolled-back run leaves it untouched. Nothing is deleted. Parsing and balance math happen before the transaction. If nothing parses, the importer returns before touching the database. The development importer (`importer.ts`) instead deletes both tables and refills them inside the same single transaction.
 
-**Idempotency by full replacement.** Reimport is idempotent because the tables are emptied and refilled, not because of a content hash or an upsert. Rerunning an import produces the same row count (`pipeline.test.ts`). `message_guid` carries a unique constraint.
+**Idempotency.**
+- In `importer2.ts`, reimport is idempotent because the cursor only advances: a run reads only messages whose ROWID is greater than the last stored one, then moves the cursor to the highest ROWID it read.
+- This relies on the cursor being correct. `createAllTransactions` does not pass `skipDuplicates`, so a re-read message with an existing `message_guid` raises a unique violation and rolls the whole run back instead of being skipped. That is the intended fail-loud behaviour described under Known defects.
+- The development importer is idempotent by construction instead, because it empties and refills the tables. Rerunning it produces the same row count (`pipeline.test.ts`).
 
 **Balance cascade.**
-- Every import fully recomputes the last 6 months that have data.
-- `openingBalances` in config seeds the first month of that window. Each month's closing becomes the next month's opening.
+- In `importer2.ts`, a run recomputes every account from the earliest month it touched through the current month. Stored transactions from those months are merged with the new ones, so each snapshot covers the full month.
+- The first month's opening balance is the closing balance of the most recent stored snapshot before it, not a config value. `openingBalances` in config is used only when no earlier snapshot exists, or for an account missing from that snapshot. Each month's closing becomes the next month's opening.
 - `closing = opening - debits - transfersOut + credits + transfersIn`.
 - Each snapshot stores a `discrepancy`: the computed closing minus the last balance the bank reported by SMS. It is a reconciliation check the computation can fail.
-- Manual, recurring and CSV entries count toward balances but are not inserted into `transactions`, so the transaction and spending views do not show them.
-- Months older than the window keep their transactions but get no snapshot.
+- The development importer instead fully recomputes the last 6 months that have data, seeded from `openingBalances` in config. Months older than that window keep their transactions but get no snapshot.
+- In the development importer, manual, recurring and CSV entries count toward balances but are never inserted into `transactions`, so the transaction and spending views do not show them. These entries are not in `importer2` yet (see Scope).
 
 ## Tests
 
