@@ -43,7 +43,7 @@ describe('parseCsvImport', () => {
     expect(txs).toHaveLength(1)
     expect(txs[0]).toMatchObject({
       type: 'debit',
-      amount: 10,
+      amount: 1000,
       currency: 'EGP',
       account: 'checking',
       counterAccount: null,
@@ -94,8 +94,8 @@ describe('parseCsvImport', () => {
     const d = def({ delimiter: ';' })
     const txs = parseCsvImport(d, '2026-01', BOM + 'Date;Amount\r\n2026-01-01;"$1,234.50"\r\n\r\n2026-01-02;-£3\r\n')
     expect(txs.map((t) => [t.type, t.amount])).toEqual([
-      ['credit', 1234.5],
-      ['debit', 3],
+      ['credit', 123450],
+      ['debit', 300],
     ])
   })
 
@@ -106,6 +106,7 @@ describe('parseCsvImport', () => {
     ['an empty date', 'Date,Amount\n,1', /x\.csv:2: missing or invalid date\/day ""/],
     ['a bad amount', 'Date,Amount\n2026-01-01,abc', /x\.csv:2: invalid amount "abc"/],
     ['an empty amount', 'Date,Amount\n2026-01-01,', /x\.csv:2: invalid amount ""/],
+    ['an amount finer than minor units', 'Date,Amount\n2026-01-01,1.005', /x\.csv:2: invalid amount "1\.005"/],
   ])('throws on %s, naming file and line', (_, text, error) => {
     expect(() => parseCsvImport(def(), '2026-01', text, 'x.csv')).toThrow(error)
   })
@@ -146,7 +147,7 @@ describe('loading files', () => {
 
   it('reads the month file, or nothing when it does not exist', () => {
     const d = def({ file: join(dir, '{yearMonth}.csv') })
-    expect(loadCsvImport(d, '2026-01').map((t) => t.amount)).toEqual([7])
+    expect(loadCsvImport(d, '2026-01').map((t) => t.amount)).toEqual([700])
     expect(loadCsvImport(d, '2026-02')).toEqual([])
   })
 
@@ -155,8 +156,8 @@ describe('loading files', () => {
       def({ id: 'a', file: join(dir, 'all.csv'), from: '2026-02', to: '2026-02' }),
       def({ id: 'b', file: join(dir, 'all.csv'), from: '2026-01', to: '2026-01' }),
     ]
-    expect(loadCsvTransactions('2026-01', imports).map((t) => t.amount)).toEqual([1])
-    expect(loadCsvTransactions('2026-02', imports).map((t) => t.amount)).toEqual([2])
+    expect(loadCsvTransactions('2026-01', imports).map((t) => t.amount)).toEqual([100])
+    expect(loadCsvTransactions('2026-02', imports).map((t) => t.amount)).toEqual([200])
     expect(loadCsvTransactions('2026-03', imports)).toEqual([])
   })
 
@@ -176,7 +177,7 @@ describe('parseCsvImport strictness', () => {
   it('trims header names and cells', () => {
     const d = def({ columns: { date: 'Date', amount: 'Amount', merchant: 'Who' } })
     const [tx] = parseCsvImport(d, '2026-01', ' Date , Amount , Who \n 2026-01-02 , -5 ,  SHOP  \n')
-    expect(tx).toMatchObject({ amount: 5, merchant: 'SHOP', type: 'debit' })
+    expect(tx).toMatchObject({ amount: 500, merchant: 'SHOP', type: 'debit' })
   })
 
   it('skips whitespace-only lines', () => {
@@ -200,16 +201,16 @@ describe('parseCsvImport strictness', () => {
   })
 
   it('strips only a leading currency symbol, however long', () => {
-    expect(parseCsvImport(def(), '2026-01', 'Date,Amount\n2026-01-02,EGP 12\n')[0].amount).toBe(12)
+    expect(parseCsvImport(def(), '2026-01', 'Date,Amount\n2026-01-02,EGP 12\n')[0].amount).toBe(1200)
     expect(parseCsvImport(def(), '2026-01', 'Date,Amount\n2026-01-02,-US$3\n')[0]).toMatchObject({
       type: 'debit',
-      amount: 3,
+      amount: 300,
     })
     expect(() => parseCsvImport(def(), '2026-01', 'Date,Amount\n2026-01-02,12 EGP', 'x.csv')).toThrow(/invalid amount/)
   })
 
   it('resolves a relative file path against backend/', () => {
     const d = def({ file: 'test/fixtures/csv/{yearMonth}/conversions.csv', columns: { day: 'Day', amount: 'Amount' } })
-    expect(loadCsvImport(d, '2026-03').map((t) => t.amount)).toEqual([1000, 500])
+    expect(loadCsvImport(d, '2026-03').map((t) => t.amount)).toEqual([100000, 50000])
   })
 })

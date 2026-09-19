@@ -23,7 +23,7 @@ describe('manualTransactions', () => {
     expect(fees.map((t) => t.yearMonth)).toEqual(['2026-02', '2026-03', '2026-04'])
     expect(fees[0]).toMatchObject({
       type: 'debit',
-      amount: 10,
+      amount: 1000,
       currency: 'EGP',
       account: 'checking',
       counterAccount: null,
@@ -50,7 +50,7 @@ describe('manualTransactions', () => {
 
   it('stages one-off entries as-is, bucketed by their date', async () => {
     const cashback = (await load(new Date(2026, 3, 1))).find((t) => t.merchant === 'CASHBACK')
-    expect(cashback).toMatchObject({ type: 'credit', amount: 5, yearMonth: '2026-03', counterAccount: null })
+    expect(cashback).toMatchObject({ type: 'credit', amount: 500, yearMonth: '2026-03', counterAccount: null })
     expect(cashback?.transactedAt.toISOString()).toBe('2026-03-15T00:00:00.000Z')
   })
 

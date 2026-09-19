@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { config, type CsvImport } from '../config'
 import { toYearMonth } from '.'
 import type { Currency, StagedTransaction, TransactionType } from '../types'
+import { parseMinor, type Minor } from '../money'
 
 /**
  * Transactions that live in CSV files instead of bank SMS — e.g. a statement
@@ -98,7 +99,7 @@ export function parseCsvImport(
 
     transactions.push({
       type,
-      amount: Math.abs(signed),
+      amount: Math.abs(signed) as Minor,
       currency,
       account: def.account,
       counterAccount: def.counterAccount ?? null,
@@ -131,11 +132,11 @@ function rowDate(date: string | undefined, day: string | undefined, yearMonth: s
 }
 
 // Accepts thousands separators and a leading currency symbol: "$1,234.50", "-42".
-function parseAmount(value: string | undefined, where: string): number {
+function parseAmount(value: string | undefined, where: string): Minor {
   const cleaned = (value ?? '').replace(/[,\s]/g, '').replace(/^(-?)[^\d.-]+/, '$1')
-  const amount = Number(cleaned)
-  if (cleaned === '' || !Number.isFinite(amount)) throw new Error(`${where}: invalid amount "${value ?? ''}"`)
-  return amount
+  const amount = parseMinor(cleaned)
+  if (!amount.ok) throw new Error(`${where}: invalid amount "${value ?? ''}"`)
+  return amount.value
 }
 
 /** Splits one CSV line, honouring double-quoted cells and "" escapes. */

@@ -1,13 +1,16 @@
 import { prisma } from './client'
 import { config } from '../utils/config'
-import type { AccountBalance, AccountId } from '../utils/types'
+import type { AccountBalance, AccountId, MinorBalance } from '../utils/types'
+import { decimalToMinor, minorToDecimal, type Minor } from '../utils/money'
 import type { Prisma } from '@prisma/client'
 
 type Db = Prisma.TransactionClient
-type OpeningBalances = Record<AccountId, number>
+type OpeningBalances = Record<AccountId, Minor>
+
+const toDecimal = (m: Minor | null) => (m === null ? null : minorToDecimal(m))
 
 // ---------------------------------------------------------------------------
-// Write — store one computed AccountBalance as a monthly_balances row
+// Write — store one computed balance as a monthly_balances row
 // ---------------------------------------------------------------------------
 
 /**
@@ -17,18 +20,18 @@ type OpeningBalances = Record<AccountId, number>
  * that already have rows: a backdated transaction forces a recompute that must
  * overwrite the existing snapshot. First run inserts, later runs update.
  */
-export async function upsertBalance(bal: AccountBalance, db: Db = prisma): Promise<void> {
+export async function upsertBalance(bal: MinorBalance, db: Db = prisma): Promise<void> {
   const { yearMonth, account } = bal
 
   const data = {
-    openingBalance: bal.openingBalance,
-    debits: bal.debits,
-    credits: bal.credits,
-    transfersIn: bal.transfersIn,
-    transfersOut: bal.transfersOut,
-    closingBalance: bal.closingBalance,
-    lastReportedBalance: bal.lastReportedBalance,
-    discrepancy: bal.discrepancy,
+    openingBalance: minorToDecimal(bal.openingBalance),
+    debits: minorToDecimal(bal.debits),
+    credits: minorToDecimal(bal.credits),
+    transfersIn: minorToDecimal(bal.transfersIn),
+    transfersOut: minorToDecimal(bal.transfersOut),
+    closingBalance: minorToDecimal(bal.closingBalance),
+    lastReportedBalance: toDecimal(bal.lastReportedBalance),
+    discrepancy: toDecimal(bal.discrepancy),
   }
 
   await db.monthlyBalance.upsert({
@@ -58,7 +61,7 @@ export async function openingFor(yearMonth: string, db: Db = prisma): Promise<Op
   const rows = await db.monthlyBalance.findMany({ where: { yearMonth: prior.yearMonth } })
   const opening = { ...config.openingBalances }
   for (const row of rows) {
-    opening[row.account as AccountId] = row.closingBalance.toNumber()
+    opening[row.account as AccountId] = decimalToMinor(row.closingBalance)
   }
   return opening
 }
@@ -67,7 +70,7 @@ export async function openingFor(yearMonth: string, db: Db = prisma): Promise<Op
  * Upserts all computed balances in parallel.
  * Must be called inside a prisma.$transaction — the caller provides atomicity.
  */
-export async function upsertAllBalances(balances: AccountBalance[], db: Db): Promise<void> {
+export async function upsertAllBalances(balances: MinorBalance[], db: Db): Promise<void> {
   await Promise.all(balances.map((bal) => upsertBalance(bal, db)))
 }
 

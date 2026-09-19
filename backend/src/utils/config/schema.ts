@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { numberToMinor } from '../money'
 
 /**
  * Personal data that must never be committed: your accounts and how bank SMS
@@ -17,6 +18,13 @@ const TxType = z.enum(['debit', 'credit'])
 const Currency = z.enum(['EGP', 'USD'])
 /** An account id; checked against `accounts` once the whole file has parsed. */
 const AccountRef = z.string()
+/** A money amount, read into integer minor units (see utils/money.ts). */
+const toMinor = (n: number, ctx: z.RefinementCtx) => {
+  const parsed = numberToMinor(n)
+  if (parsed.ok) return parsed.value
+  ctx.addIssue({ code: 'custom', message: parsed.error })
+  return z.NEVER
+}
 
 const Account = z.object({
   id: z.string().min(1),
@@ -28,7 +36,7 @@ const Account = z.object({
 const ManualEntry = z.object({
   type: TxType,
   /** Always positive; direction is encoded in type */
-  amount: z.number().nonnegative(),
+  amount: z.number().nonnegative().transform(toMinor),
   currency: Currency,
   account: AccountRef,
   /** Short description of what this is */
@@ -139,7 +147,7 @@ export const WealthiConfigSchema = z
      */
     accountSources: z.record(z.string(), AccountRef),
     /** Genesis balances, used for the first month with no earlier snapshot */
-    openingBalances: z.record(AccountRef, z.number()),
+    openingBalances: z.record(AccountRef, z.number().transform(toMinor)),
     /** Merchant name as printed by the bank → category label */
     merchantCategories: z.record(z.string(), z.string()),
     /** Categories offered by the UI that no merchant maps to yet */

@@ -3,7 +3,7 @@ import { readMessages } from './ingest/reader'
 import type {
   DbRow,
   StagedTransaction,
-  AccountBalance,
+  MinorBalance,
   AccountId,
   StageMessages,
   RecomputeBalance,
@@ -100,7 +100,7 @@ const recomputeBalances = async (staged: StagedTransaction[], earliest: string, 
   const months = monthRange(earliest, through)
   const stored = await findFromMonth(earliest)
   const byMonth = groupByMonth([...stored, ...staged])
-  const balances: AccountBalance[] = []
+  const balances: MinorBalance[] = []
   let opening = await openingFor(months[0])
 
   for (const yearMonth of months) {

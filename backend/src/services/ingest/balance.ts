@@ -1,8 +1,9 @@
-import type { AccountId, ParsedTransaction, AccountBalance } from '../../utils/types'
-import { round2 } from '../../utils/helpers'
+import type { AccountId, ParsedTransaction, MinorBalance } from '../../utils/types'
+import type { Minor } from '../../utils/money'
 
 /**
- * Computes the AccountBalance for one account in one calendar month.
+ * Computes the balance for one account in one calendar month, in minor units.
+ * Every sum below is integer arithmetic, so it is exact and needs no rounding.
  *
  * Paired inter-account transfers are excluded from `debits` and `credits`
  * and reported separately as `netTransfers`, keeping the summary consistent
@@ -21,14 +22,14 @@ import { round2 } from '../../utils/helpers'
 export function computeBalance(
   account: AccountId,
   yearMonth: string,
-  openingBalance: number,
+  openingBalance: Minor,
   transactions: ParsedTransaction[],
-): AccountBalance {
+): MinorBalance {
   let debits = 0
   let credits = 0
   let transfersIn = 0
   let transfersOut = 0
-  let lastReportedBalance: number | null = null
+  let lastReportedBalance: Minor | null = null
   let lastReportedAt: Date | null = null
 
   for (const tx of transactions) {
@@ -55,17 +56,17 @@ export function computeBalance(
   }
 
   const closingBalance = openingBalance - debits - transfersOut + credits + transfersIn
-  const discrepancy = lastReportedBalance !== null ? round2(closingBalance - lastReportedBalance) : null
+  const discrepancy = lastReportedBalance !== null ? ((closingBalance - lastReportedBalance) as Minor) : null
 
   return {
     account,
     yearMonth,
     openingBalance,
-    debits: round2(debits),
-    credits: round2(credits),
-    transfersIn: round2(transfersIn),
-    transfersOut: round2(transfersOut),
-    closingBalance: round2(closingBalance),
+    debits: debits as Minor,
+    credits: credits as Minor,
+    transfersIn: transfersIn as Minor,
+    transfersOut: transfersOut as Minor,
+    closingBalance: closingBalance as Minor,
     lastReportedBalance,
     discrepancy,
   }

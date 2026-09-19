@@ -112,6 +112,26 @@ describe('WealthiConfigSchema', () => {
     expect(all).toMatch(/accounts\.0\.currency/)
   })
 
+  it('reads amounts and opening balances into minor units', () => {
+    const c = valid()
+    c.openingBalances = { a: 1234.5, b: -0.07 }
+    c.manualTransactions[0].amount = 1.15
+    const parsed = WealthiConfigSchema.parse(c)
+    expect(parsed.openingBalances).toEqual({ a: 123450, b: -7 })
+    expect(parsed.manualTransactions[0].amount).toBe(115)
+    expect(parsed.recurringTransactions[0].amount).toBe(100)
+  })
+
+  it('rejects an amount finer than minor units, naming its path', () => {
+    const c = valid()
+    c.openingBalances = { a: 0.001, b: 0 }
+    c.recurringTransactions[0].amount = 2.345
+    expect(issues(c)).toEqual([
+      'openingBalances.a: more than 2 decimal places in "0.001"',
+      'recurringTransactions.0.amount: more than 2 decimal places in "2.345"',
+    ])
+  })
+
   it('checks csvImports: range order, exactly one of date/day, and a currency source', () => {
     const c = valid()
     c.csvImports[0] = { ...c.csvImports[0], from: '2026-03', to: '2026-01' }

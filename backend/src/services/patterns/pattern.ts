@@ -65,10 +65,12 @@ export interface PatternFile {
 export interface Extracted {
   patternId: string
   type: 'debit' | 'credit' | null
-  amount: number | null
+  /** Raw amount text with ASCII digits ("1,234.50"); the parser reads it into minor units */
+  amount: string | null
   /** Raw currency token as printed ("EGP", "جم", …); see CURRENCIES */
   currency: string | null
-  balance: number | null
+  /** Raw balance text, like `amount` */
+  balance: string | null
   /** merchant, else counterparty, else description */
   merchant: string | null
   /** "<bank>:<last 4 digits>" — mapped to an own account by accountSources */
@@ -145,8 +147,6 @@ export function compile(pattern: string): Compiled {
   return c
 }
 
-const toNumber = (raw: string) => parseFloat(raw.replace(/[\s,]/g, ''))
-
 /**
  * Values of the most specific pattern matching the whole message (most literal
  * words wins), or null when none match.
@@ -167,15 +167,13 @@ export function extract(bank: string, patterns: Pattern[], text: string): Extrac
     const i = c.roles.indexOf(role)
     return i === -1 ? null : m[i + 1].trim()
   }
-  const amount = get('amount')
-  const balance = get('balance')
   const digits = get('account')?.replace(/\D/g, '') ?? ''
   return {
     patternId: p.id,
     type: p.type === 'by-keyword' ? directionOf(get('direction') ?? '') : p.type,
-    amount: amount === null ? null : toNumber(amount),
+    amount: get('amount'),
     currency: get('currency'),
-    balance: balance === null ? null : toNumber(balance),
+    balance: get('balance'),
     merchant: get('merchant') || get('counterparty') || get('description') || null,
     accountKey: digits ? `${bank}:${digits.slice(-4)}` : null,
     reference: get('reference'),

@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { readMessages } from './ingest/reader'
-import type { DbRow, StagedTransaction, AccountBalance, StageMessages, RecomputeBalance } from '../utils/types'
+import type { DbRow, StagedTransaction, MinorBalance, StageMessages, RecomputeBalance } from '../utils/types'
 import { ALL_ACCOUNTS, config } from '../utils/config'
 import { decode } from './ingest/decode'
 import { parser } from './ingest/parser'
@@ -66,7 +66,7 @@ async function recomputeBalances(staged: StagedTransaction[]): RecomputeBalance 
   const stored = manualTransactions
   const byMonth = groupByMonth([...stored, ...staged])
   const months = [...byMonth.keys()].sort().slice(-6)
-  const balances: AccountBalance[] = []
+  const balances: MinorBalance[] = []
   let opening = { ...config.openingBalances }
 
   for (const yearMonth of months) {

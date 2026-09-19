@@ -8,6 +8,7 @@ import { importFromChatDb } from '../../src/services/importer'
 import { buildChatDb } from '../fixtures/chat-db'
 import { LEDGER } from '../fixtures/messages'
 import { resetDatabase } from '../setup/reset'
+import type { Minor } from '../../src/utils/money'
 
 /** The db/ query layer against the imported fixture ledger. */
 
@@ -113,20 +114,32 @@ describe('balances', () => {
   })
 
   it('opens a month with the closing balances of the latest earlier snapshot', async () => {
-    expect(await openingFor('2026-02')).toEqual({ checking: 5750, card: 0, savings_usd: 0 })
+    expect(await openingFor('2026-02')).toEqual({ checking: 575000, card: 0, savings_usd: 0 })
     // Skips a gap: nothing is stored for 2026-05, so it reads February.
-    expect(await openingFor('2026-06')).toEqual({ checking: 6950, card: -140, savings_usd: 0 })
+    expect(await openingFor('2026-06')).toEqual({ checking: 695000, card: -14000, savings_usd: 0 })
   })
 
   it('falls back to config openingBalances before the first snapshot', async () => {
-    expect(await openingFor('2026-01')).toEqual({ checking: 1000, card: 0, savings_usd: 0 })
+    expect(await openingFor('2026-01')).toEqual({ checking: 100000, card: 0, savings_usd: 0 })
   })
 
   it('upsert overwrites an existing snapshot and stamps computedAt', async () => {
     const before = await prisma.monthlyBalance.findUniqueOrThrow({
       where: { yearMonth_account: { yearMonth: '2026-01', account: 'savings_usd' } },
     })
-    await upsertBalance({ ...(await findBalancesByMonth('2026-01'))[2], closingBalance: 12.34, discrepancy: 1 })
+    const zero = 0 as Minor
+    await upsertBalance({
+      account: 'savings_usd',
+      yearMonth: '2026-01',
+      openingBalance: zero,
+      debits: zero,
+      credits: zero,
+      transfersIn: zero,
+      transfersOut: zero,
+      closingBalance: 1234 as Minor,
+      lastReportedBalance: null,
+      discrepancy: 100 as Minor,
+    })
     const after = await prisma.monthlyBalance.findUniqueOrThrow({
       where: { yearMonth_account: { yearMonth: '2026-01', account: 'savings_usd' } },
     })
@@ -143,5 +156,27 @@ describe('misc', () => {
 
   it('inserts nothing for no transactions', async () => {
     expect(await createAllTransactions([], prisma)).toBe(0)
+  })
+
+  it('round-trips minor units and a missing reported balance', async () => {
+    const tx = {
+      type: 'debit' as const,
+      amount: 1234507 as Minor,
+      currency: 'EGP' as const,
+      account: 'checking',
+      merchant: 'ROUND TRIP',
+      counterAccount: null,
+      reportedBalance: null,
+      transactedAt: new Date('2030-01-10T12:00:00Z'),
+      yearMonth: '2030-01',
+    }
+    expect(await createAllTransactions([tx], prisma)).toBe(1)
+    const stored = await prisma.transaction.findFirstOrThrow({ where: { yearMonth: '2030-01' } })
+    expect(stored.amount.toFixed(2)).toBe('12345.07')
+    expect((await findFromMonth('2030-01'))[0]).toMatchObject({ amount: 1234507, reportedBalance: null })
+    expect((await queryTransactions({ yearMonth: '2030-01' }))[0]).toMatchObject({
+      amount: 12345.07,
+      reportedBalance: null,
+    })
   })
 })

@@ -1,4 +1,5 @@
 import type { AccountBalance, AccountId, Currency, TransactionType } from '@wealthi/shared'
+import type { Minor } from './money'
 
 // Contract types shared with the frontend, re-exported so backend modules keep
 // importing everything from here.
@@ -26,7 +27,7 @@ export interface DecodedMessage {
 
 interface BaseTransaction {
   /** Always positive — direction is encoded in `type` */
-  amount: number
+  amount: Minor
   currency: Currency
   account: AccountId
   /** Merchant or payee name as printed by the bank */
@@ -44,7 +45,7 @@ interface BaseTransaction {
    */
   counterAccount: AccountId | null
   /** Bank-reported available balance following this transaction */
-  reportedBalance: number | null
+  reportedBalance: Minor | null
   /** Timestamp from the SMS text (null when the SMS omits it) */
   transactedAt: Date
   messageGuid?: string | null
@@ -80,8 +81,14 @@ interface TransactionMeta {
   isTransfer: boolean
 }
 
-/** ParsedTransaction enriched with a DB identity and import timestamp */
-export type Transaction = ParsedTransaction & TransactionMeta
+/** ParsedTransaction enriched with a DB identity and import timestamp, in minor units for the balance cascade */
+export type StoredTransaction = ParsedTransaction & TransactionMeta
+
+/** StoredTransaction as the API sends it: money as a plain number of major units */
+export type Transaction = Omit<StoredTransaction, 'amount' | 'reportedBalance'> & {
+  amount: number
+  reportedBalance: number | null
+}
 
 export type ImportError = { stage: 'parse'; decoded: DecodedMessage; cause: unknown }
 
@@ -98,7 +105,21 @@ export interface StageMessages {
   maxRowid: bigint | null
 }
 
-export type RecomputeBalance = Promise<{ balances: AccountBalance[]; months: number }>
+/** AccountBalance as computed, with every amount in minor units; converted at the DB write. */
+export interface MinorBalance {
+  account: AccountId
+  yearMonth: string
+  openingBalance: Minor
+  debits: Minor
+  credits: Minor
+  transfersIn: Minor
+  transfersOut: Minor
+  closingBalance: Minor
+  lastReportedBalance: Minor | null
+  discrepancy: Minor | null
+}
+
+export type RecomputeBalance = Promise<{ balances: MinorBalance[]; months: number }>
 
 /** A deterministic routing rule for an internal transfer; defined by the config schema. */
 export type { TransferRule } from './config/schema'

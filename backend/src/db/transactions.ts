@@ -4,8 +4,10 @@ import type {
   Currency,
   ParsedTransaction,
   StagedTransaction,
+  StoredTransaction,
   Transaction as OurTransaction,
 } from '../utils/types'
+import { decimalToMinor, minorToDecimal, minorToNumber } from '../utils/money'
 import type { Prisma, Transaction as PrismaRow } from '@prisma/client'
 import type { TransactionFilters } from '@wealthi/shared'
 
@@ -15,19 +17,16 @@ type Db = Prisma.TransactionClient
 // Mapping — Prisma row → our Transaction type
 // ---------------------------------------------------------------------------
 // Prisma returns DECIMAL columns as Decimal objects (from the decimal.js-light
-// library). We convert them to plain numbers; the amounts in this app are
-// well within float64 precision (max ~100 million EGP, 2 decimal places).
+// library). They are read into integer minor units through their exact
+// two-place string (utils/money.ts), so the balance cascade sums integers and
+// never floats. Only rows headed for the API become plain numbers (toApi).
 
-function toNumber(d: Prisma.Decimal | null): number | null {
-  return d === null ? null : d.toNumber()
-}
-
-function mapRow(row: PrismaRow): OurTransaction {
+function mapRow(row: PrismaRow): StoredTransaction {
   const shared = {
     id: row.id,
     yearMonth: row.yearMonth,
     createdAt: row.createdAt,
-    amount: row.amount.toNumber(),
+    amount: decimalToMinor(row.amount),
     // Prisma enum values are the same string literals as our union types,
     // so the cast is safe — TypeScript structural typing confirms this.
     currency: row.currency as Currency,
@@ -35,7 +34,7 @@ function mapRow(row: PrismaRow): OurTransaction {
     merchant: row.merchant,
     category: row.category,
     counterAccount: row.counterAccount as AccountId | null,
-    reportedBalance: toNumber(row.reportedBalance),
+    reportedBalance: row.reportedBalance === null ? null : decimalToMinor(row.reportedBalance),
     transactedAt: row.transactedAt,
     // Derived from counterAccount at extraction time — not a stored column.
     isTransfer: row.counterAccount !== null,
@@ -44,6 +43,15 @@ function mapRow(row: PrismaRow): OurTransaction {
   // `type` is the union discriminant; transfers are debit/credit legs that also
   // carry a counterAccount (set above), so there is no separate variant here.
   return row.type === 'credit' ? { ...shared, type: 'credit' } : { ...shared, type: 'debit' }
+}
+
+/** The API's shape of a row: money as a plain number of major units. */
+function toApi(tx: StoredTransaction): OurTransaction {
+  return {
+    ...tx,
+    amount: minorToNumber(tx.amount),
+    reportedBalance: tx.reportedBalance === null ? null : minorToNumber(tx.reportedBalance),
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -57,12 +65,12 @@ function toCreateData(
   return {
     yearMonth,
     type: tx.type,
-    amount: tx.amount,
+    amount: minorToDecimal(tx.amount),
     currency: tx.currency,
     account: tx.account,
     merchant: tx.merchant,
     category: tx.category ?? null,
-    reportedBalance: tx.reportedBalance,
+    reportedBalance: tx.reportedBalance === null ? null : minorToDecimal(tx.reportedBalance),
     transactedAt: tx.transactedAt,
     counterAccount: tx.counterAccount,
     // Present only on SMS-derived rows; null for manual/CSV legs. The unique
@@ -76,7 +84,7 @@ function toCreateData(
  * All transactions at or after `fromYearMonth`, ordered chronologically.
  * One query for the whole cascade range; the caller groups them by month.
  */
-export async function findFromMonth(fromYearMonth: string, db: Db = prisma): Promise<OurTransaction[]> {
+export async function findFromMonth(fromYearMonth: string, db: Db = prisma): Promise<StoredTransaction[]> {
   const rows = await db.transaction.findMany({
     where: { yearMonth: { gte: fromYearMonth } },
     orderBy: [{ yearMonth: 'asc' }, { transactedAt: 'asc' }, { createdAt: 'asc' }],
@@ -111,7 +119,7 @@ export async function queryTransactions(filters: TransactionFilters, db: Db = pr
     where,
     orderBy: [{ transactedAt: 'desc' }, { createdAt: 'desc' }],
   })
-  return rows.map(mapRow)
+  return rows.map((row) => toApi(mapRow(row)))
 }
 
 /**
@@ -128,7 +136,7 @@ export async function updateCategory(
 ): Promise<OurTransaction | null> {
   try {
     const row = await db.transaction.update({ where: { id }, data: { category } })
-    return mapRow(row)
+    return toApi(mapRow(row))
   } catch (err) {
     // P2025 — "record to update not found". The route turns this into a 404;
     // anything else is a real failure and keeps propagating.

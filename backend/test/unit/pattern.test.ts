@@ -34,9 +34,9 @@ describe('extract', () => {
     expect(x).toEqual({
       patternId: 'bank:charge',
       type: 'debit',
-      amount: 1234.5,
+      amount: '1,234.50',
       currency: 'EGP',
-      balance: 10000,
+      balance: '10,000.00',
       merchant: 'ACME GROCERS',
       accountKey: 'bank:4321',
       reference: null,
@@ -45,12 +45,12 @@ describe('extract', () => {
 
   it('tolerates spacing the mask split apart ("bal.EGP10")', () => {
     const p = pattern({ pattern: 'Spent {currency:CUR} {amount:NUM} , bal . {:CUR} {balance:NUM}' })
-    expect(extract('bank', [p], 'Spent EGP 5.00, bal.EGP10.00')?.balance).toBe(10)
+    expect(extract('bank', [p], 'Spent EGP 5.00, bal.EGP10.00')?.balance).toBe('10.00')
   })
 
   it('normalises Arabic-Indic digits', () => {
     const p = pattern({ pattern: 'Spent {currency:CUR} {amount:NUM}' })
-    expect(extract('bank', [p], 'Spent EGP ١٢٣')?.amount).toBe(123)
+    expect(extract('bank', [p], 'Spent EGP ١٢٣')?.amount).toBe('123')
   })
 
   it('returns null when nothing matches the whole message', () => {
@@ -93,7 +93,7 @@ describe('pattern details', () => {
   it('splits the pattern on any run of whitespace', () => {
     expect(compile('Paid   {amount:NUM}').literals).toBe(1)
     const p = pattern({ pattern: 'Paid  {currency:CUR}   {amount:NUM}' })
-    expect(extract('bank', [p], 'Paid EGP 5')?.amount).toBe(5)
+    expect(extract('bank', [p], 'Paid EGP 5')?.amount).toBe('5')
   })
 
   it('keeps the first of two equally specific patterns', () => {

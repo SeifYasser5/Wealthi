@@ -25,11 +25,11 @@ describe('parser', () => {
       patternId: 'test-bank:card-charge',
       value: {
         type: 'debit',
-        amount: 250,
+        amount: 25000,
         currency: 'EGP',
         account: 'card',
         merchant: 'ACME GROCERS',
-        reportedBalance: 4750,
+        reportedBalance: 475000,
       },
     })
   })
@@ -99,8 +99,34 @@ describe('parser rejections', () => {
       'Charged EGP 5',
       'no account number in message',
     ],
+    [
+      'a malformed amount',
+      'debit',
+      'Card {account:MASKED} charged {currency:CUR} {amount:TEXT}',
+      'Card *1111 charged EGP 1.2.3',
+      'invalid amount "1.2.3"',
+    ],
+    [
+      'an amount finer than minor units',
+      'debit',
+      'Card {account:MASKED} charged {currency:CUR} {amount:NUM}',
+      'Card *1111 charged EGP 1.005',
+      'more than 2 decimal places in "1.005"',
+    ],
+    [
+      'a malformed balance',
+      'debit',
+      'Card {account:MASKED} charged {currency:CUR} {amount:NUM} balance {balance:TEXT}',
+      'Card *1111 charged EGP 5 balance n/a',
+      'balance: invalid amount "n/a"',
+    ],
   ] as const)('reports %s', (_, type, pattern, text, expected) => {
     expect(cause(only(pattern, type)(message(text)))).toBe(`pattern test-bank:p: ${expected}`)
+  })
+
+  it('reads Arabic-Indic digits into minor units', () => {
+    const p = only('Card {account:MASKED} {currency:CUR} {amount:NUM}')
+    expect(p(message('Card *١١١١ EGP ١,٢٣٤.٥'))).toMatchObject({ ok: true, value: { amount: 123450 } })
   })
 
   it('maps Arabic currency words and keeps EUR out of EGP/USD accounts', () => {

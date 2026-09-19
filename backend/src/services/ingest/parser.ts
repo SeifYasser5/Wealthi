@@ -2,6 +2,7 @@ import type { Currency, DecodedMessage, ParsedTransaction } from '../../utils/ty
 import { ACCOUNTS, accountFor } from '../../utils/config'
 import { CURRENCIES, extract, type Pattern, type PatternFile } from '../patterns/pattern'
 import { loadPatternFiles } from '../patterns/store'
+import { parseMinor, type Minor } from '../../utils/money'
 
 /**
  * Parses bank SMS with the enabled patterns in config/patterns.
@@ -59,7 +60,9 @@ export function createPatternParser(files: PatternFile[]): (message: DecodedMess
 
     const where = `pattern ${x.patternId}`
     if (x.type === null) return fail(`${where}: could not tell debit from credit`)
-    if (x.amount === null || Number.isNaN(x.amount)) return fail(`${where}: no amount`)
+    if (x.amount === null) return fail(`${where}: no amount`)
+    const amount = parseMinor(x.amount)
+    if (!amount.ok) return fail(`${where}: ${amount.error}`)
     const currency = CURRENCIES[x.currency ?? '']
     if (!currency) return fail(`${where}: unknown currency "${x.currency}"`)
     if (!x.accountKey) return fail(`${where}: no account number in message`)
@@ -73,18 +76,24 @@ export function createPatternParser(files: PatternFile[]): (message: DecodedMess
         reason: `${where}: ${currency} amount on ${accountCurrency} account ${account}`,
       }
     }
+    let reportedBalance: Minor | null = null
+    if (x.balance !== null) {
+      const balance = parseMinor(x.balance)
+      if (!balance.ok) return fail(`${where}: balance: ${balance.error}`)
+      reportedBalance = balance.value
+    }
 
     return {
       ok: true,
       patternId: x.patternId,
       value: {
         type: x.type,
-        amount: x.amount,
+        amount: amount.value,
         currency: currency as Currency,
         account,
         merchant: x.merchant,
         counterAccount: null,
-        reportedBalance: x.balance,
+        reportedBalance,
         transactedAt: message.messageDate,
         messageGuid: message.guid,
         sourceRowid: message.rowid,
