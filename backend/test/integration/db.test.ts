@@ -86,8 +86,8 @@ describe('getSpendingTransactions', () => {
   it('returns non-transfer debits for the month, largest first', async () => {
     const rows = await getSpendingTransactions('2026-02')
     expect(rows.map((r) => [r.merchant, r.amount])).toEqual([
-      ['ACME GROCERS', 100],
-      ['CITY CAFE', 40],
+      ['ACME GROCERS', 10000],
+      ['CITY CAFE', 4000],
     ])
     // January's CARD PAYMENT debit is a transfer, so only the grocery charge is spending.
     expect(merchants(await getSpendingTransactions('2026-01'))).toEqual(['ACME GROCERS'])

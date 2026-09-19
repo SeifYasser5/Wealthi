@@ -128,7 +128,7 @@ export type { TransferRule } from './config/schema'
 export interface SpendingTransaction {
   id: string
   merchant: string | null
-  amount: number
+  amount: Minor
   account: string
   /** Manual override; null means the merchant map decides. */
   category: string | null

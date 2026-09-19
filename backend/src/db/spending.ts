@@ -1,5 +1,6 @@
 import { prisma } from './client'
 import type { SpendingTransaction } from '../utils/types'
+import { decimalToMinor } from '../utils/money'
 
 /**
  * Every debit (non-transfer) transaction for the month — the raw input to the
@@ -20,7 +21,7 @@ export async function getSpendingTransactions(yearMonth: string): Promise<Spendi
   return rows.map((r) => ({
     id: r.id,
     merchant: r.merchant,
-    amount: Number(r.amount),
+    amount: decimalToMinor(r.amount),
     account: r.account,
     category: r.category,
     transactedAt: r.transactedAt,
