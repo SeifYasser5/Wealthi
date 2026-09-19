@@ -3,8 +3,8 @@ import { resolve } from 'node:path'
 import { compile, type Pattern, type PatternFile } from './pattern'
 import type { LearnedPattern } from './learn'
 
-/** config/patterns/<bank>.json — gitignored, next to config/wealthi.json */
-export const PATTERNS_DIR = resolve(__dirname, '../../../config/patterns')
+/** config/patterns/<bank>.json — gitignored, next to config/wealthi.json. WEALTHI_PATTERNS_DIR overrides it (tests). */
+export const PATTERNS_DIR = resolve(process.env.WEALTHI_PATTERNS_DIR ?? resolve(__dirname, '../../../config/patterns'))
 
 /** "ADCB Egypt" → "adcb-egypt" */
 export function bankOf(sender: string): string {

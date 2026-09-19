@@ -7,7 +7,11 @@ import { WealthiConfigSchema, type WealthiConfig } from './schema'
 
 export type { CsvImport, ManualEntry, RecurringEntry, TransferRule, WealthiConfig } from './schema'
 
-export const CONFIG_PATH = resolve(__dirname, '../../../config/wealthi.json')
+// WEALTHI_CONFIG_PATH points the app at another file — the test suite uses it
+// to load a synthetic config instead of your real one.
+export const CONFIG_PATH = resolve(
+  process.env.WEALTHI_CONFIG_PATH ?? resolve(__dirname, '../../../config/wealthi.json'),
+)
 
 function load(): WealthiConfig {
   if (!existsSync(CONFIG_PATH)) {
