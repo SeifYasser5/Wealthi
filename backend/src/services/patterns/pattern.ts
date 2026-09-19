@@ -95,7 +95,9 @@ export const DEBIT_WORDS = [
   /سحب/,
 ]
 
-export const hasDirectionWord = (text: string) => [...CREDIT_WORDS, ...DEBIT_WORDS].some((re) => re.test(text))
+const DIRECTION_WORDS = [...CREDIT_WORDS, ...DEBIT_WORDS]
+
+export const hasDirectionWord = (text: string) => DIRECTION_WORDS.some((re) => re.test(text))
 
 export function directionOf(text: string): 'debit' | 'credit' | null {
   const credit = CREDIT_WORDS.some((re) => re.test(text))

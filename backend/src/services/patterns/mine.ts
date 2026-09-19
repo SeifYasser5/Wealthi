@@ -57,12 +57,20 @@ function blocksSlot(seq: string[], k: number): boolean {
   return true
 }
 
+/** Whether any of seq[from..to) may not become part of a slot. */
+function gapBlocks(seq: string[], from: number, to: number): boolean {
+  for (let k = from; k < to; k++) if (blocksSlot(seq, k)) return true
+  return false
+}
+
 /** Index pairs of a longest common subsequence. Slots never match anything. */
 function lcs(a: string[], b: string[]): [number, number][] {
-  const dp = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0))
+  // dp[i][j] = LCS length of a[i..] and b[j..], stored flat as dp[i * w + j].
+  const w = b.length + 1
+  const dp = new Uint16Array((a.length + 1) * w)
   for (let i = a.length - 1; i >= 0; i--) {
     for (let j = b.length - 1; j >= 0; j--) {
-      dp[i][j] = same(a[i], b[j]) ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1])
+      dp[i * w + j] = same(a[i], b[j]) ? dp[(i + 1) * w + j + 1] + 1 : Math.max(dp[(i + 1) * w + j], dp[i * w + j + 1])
     }
   }
   const pairs: [number, number][] = []
@@ -73,7 +81,7 @@ function lcs(a: string[], b: string[]): [number, number][] {
       pairs.push([i, j])
       i++
       j++
-    } else if (dp[i + 1][j] >= dp[i][j + 1]) i++
+    } else if (dp[(i + 1) * w + j] >= dp[i * w + j + 1]) i++
     else j++
   }
   return pairs
@@ -84,31 +92,36 @@ function lcs(a: string[], b: string[]): [number, number][] {
  * different. Returns the literal overlap as a score for picking the best merge.
  */
 function generalize(elements: string[], tokens: string[]): { elements: string[]; score: number } | null {
+  // A literal only matches an identical literal, so the LCS can't match more
+  // literals than the smaller side has: skip the LCS when that bound already fails.
+  const fewest = Math.min(literalCount(elements), literalCount(tokens))
+  const most = Math.max(literalCount(elements), literalCount(tokens), 1)
+  if (fewest < 2 || fewest / most < MIN_LITERAL_OVERLAP) return null
+
   const pairs = lcs(elements, tokens)
   const matchedLiterals = pairs.filter(([i]) => isLiteral(elements[i])).length
-  const score = matchedLiterals / Math.max(literalCount(elements), literalCount(tokens), 1)
+  const score = matchedLiterals / most
   if (matchedLiterals < 2 || score < MIN_LITERAL_OVERLAP) return null
 
   const out: string[] = []
+  let slots = 0
   let pi = -1
   let pj = -1
   const end: [number, number] = [elements.length, tokens.length]
   for (const [i, j] of [...pairs, end]) {
-    const gapE = range(pi + 1, i)
-    const gapT = range(pj + 1, j)
-    if (gapE.length + gapT.length > 0) {
-      if (gapE.some((k) => blocksSlot(elements, k)) || gapT.some((k) => blocksSlot(tokens, k))) return null
+    if (i > pi + 1 || j > pj + 1) {
+      if (gapBlocks(elements, pi + 1, i) || gapBlocks(tokens, pj + 1, j)) return null
       out.push(SLOT)
+      slots++
     }
     if (i < elements.length) out.push(elements[i] === tokens[j] ? elements[i] : '<ID>')
     pi = i
     pj = j
   }
-  if (out.filter((t) => t === SLOT).length > MAX_SLOTS) return null
+  if (slots > MAX_SLOTS) return null
   return { elements: out, score }
 }
 
-const range = (from: number, to: number) => Array.from({ length: Math.max(0, to - from) }, (_, k) => from + k)
 const regexCache = new Map<string, RegExp>()
 
 /** Regex over SEP-joined tokens; one capture group per slot (0+ tokens, never a blocking placeholder). */
@@ -125,10 +138,31 @@ function compileTokens(elements: string[]): RegExp {
   return re
 }
 
-/** Slot fillers (each a token list) when `tokens` fits the template, else null. */
-function fillers(elements: string[], tokens: string[]): string[][] | null {
+/** Token index ranges [from, to) each slot covers when `tokens` matches the template's regex, else null. */
+function slotRanges(elements: string[], tokens: string[]): [number, number][] | null {
   const m = compileTokens(elements).exec(SEP + tokens.join(SEP))
-  return m ? m.slice(1).map((g) => g.split(SEP).filter(Boolean)) : null
+  if (!m) return null
+  const ranges: [number, number][] = []
+  let at = 0
+  let group = 1
+  for (const e of elements) {
+    // A slot's capture holds SEP + token per token it absorbed; a literal element consumes one token.
+    const n = e === SLOT ? m[group++].split(SEP).length - 1 : 1
+    if (e === SLOT) ranges.push([at, at + n])
+    at += n
+  }
+  return ranges
+}
+
+/** Whether `tokens` fits the template, with no slot swallowing an account number (same rule as merging). */
+function fits(elements: string[], tokens: string[]): boolean {
+  const ranges = slotRanges(elements, tokens)
+  return ranges !== null && !ranges.some(([from, to]) => gapBlocks(tokens, from, to))
+}
+
+/** Slot fillers (each a token list) when `tokens` matches the template's regex, else null. */
+function fillers(elements: string[], tokens: string[]): string[][] | null {
+  return slotRanges(elements, tokens)?.map(([from, to]) => tokens.slice(from, to)) ?? null
 }
 
 function cluster(sequences: Sequence[]): Template[] {
@@ -136,7 +170,7 @@ function cluster(sequences: Sequence[]): Template[] {
   const sorted = [...sequences].sort((a, b) => b.count - a.count || a.tokens.length - b.tokens.length)
 
   for (const seq of sorted) {
-    const home = templates.find((t) => fillers(t.elements, seq.tokens))
+    const home = templates.find((t) => fits(t.elements, seq.tokens))
     if (home) {
       home.members.push(seq)
       continue
@@ -156,17 +190,23 @@ function cluster(sequences: Sequence[]): Template[] {
   return templates
 }
 
+const first = (filler: string[]) => filler[0]
+const last = (filler: string[]) => filler[filler.length - 1]
+
 /** Members grouped by the first/last word of some slot, when that word has few distinct values. */
 function variantSplit(template: Template): Sequence[][] | null {
+  if (!template.elements.includes(SLOT)) return null
   const perMember = template.members.map((m) => fillers(template.elements, m.tokens)!)
   const slots = perMember[0]?.length ?? 0
 
   for (let k = 0; k < slots; k++) {
-    for (const edge of [(f: string[]) => f[0], (f: string[]) => f[f.length - 1]]) {
+    for (const edge of [first, last]) {
       const groups = new Map<string, Sequence[]>()
       template.members.forEach((m, i) => {
         const word = edge(perMember[i][k]) ?? '∅'
-        groups.set(word, [...(groups.get(word) ?? []), m])
+        const group = groups.get(word)
+        if (group) group.push(m)
+        else groups.set(word, [m])
       })
       const parts = [...groups.values()]
       const supported = parts.every((p) => p.length >= MIN_VARIANT_SUPPORT)
@@ -185,14 +225,7 @@ function mine(sequences: Sequence[], depth = 0): Template[] {
 
 export const messageCount = (t: Template) => t.members.reduce((sum, m) => sum + m.count, 0)
 
-/** Mines one bank's messages (as masked token lists), most frequent template first. */
-export function mineTokens(tokenLists: string[][]): Template[] {
-  const bySequence = new Map<string, Sequence>()
-  for (const tokens of tokenLists) {
-    const key = tokens.join(' ')
-    const seq = bySequence.get(key)
-    if (seq) seq.count++
-    else bySequence.set(key, { tokens, count: 1 })
-  }
-  return mine([...bySequence.values()]).sort((a, b) => messageCount(b) - messageCount(a))
+/** Mines one bank's distinct masked sequences into templates, most frequent template first. */
+export function mineSequences(sequences: Sequence[]): Template[] {
+  return mine(sequences).sort((a, b) => messageCount(b) - messageCount(a))
 }

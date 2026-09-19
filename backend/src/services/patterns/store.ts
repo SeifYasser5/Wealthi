@@ -1,10 +1,10 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { compile, type Pattern, type PatternFile } from './pattern'
-import type { Labelled } from './label'
+import type { LearnedPattern } from './learn'
 
 /** config/patterns/<bank>.json — gitignored, next to config/wealthi.json */
-export const PATTERNS_DIR = resolve(__dirname, '../../../../config/patterns')
+export const PATTERNS_DIR = resolve(__dirname, '../../../config/patterns')
 
 /** "ADCB Egypt" → "adcb-egypt" */
 export function bankOf(sender: string): string {
@@ -41,8 +41,6 @@ export function savePatternFile(file: PatternFile, dir = PATTERNS_DIR): string {
   writeFileSync(path, JSON.stringify(file, null, 2) + '\n')
   return path
 }
-
-export type LearnedPattern = Labelled & { id: string }
 
 export interface MergeResult {
   file: PatternFile

@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto'
-import type { DecodedMessage } from '../../../utils/types'
-import { label } from './label'
+import type { DecodedMessage } from '../../utils/types'
+import { label, type Labelled } from './label'
 import { mask } from './mask'
-import { mineTokens } from './mine'
-import type { LearnedPattern } from './store'
+import { mineSequences } from './mine'
+
+export type LearnedPattern = Labelled & { id: string }
 
 /**
  * Learns one bank's transaction patterns from its messages: mask → mine → label.
@@ -11,17 +12,20 @@ import type { LearnedPattern } from './store'
  * so the same template keeps its id across runs.
  */
 export function learnBank(bank: string, messages: DecodedMessage[]): LearnedPattern[] {
-  const textsBySequence = new Map<string, string[]>()
-  const tokenLists = messages.map((m) => {
+  // Messages sharing a masked sequence, keyed by that sequence, in first-seen order.
+  const groups = new Map<string, { tokens: string[]; texts: string[] }>()
+  for (const m of messages) {
     const tokens = mask(m.text)
     const key = tokens.join(' ')
-    textsBySequence.set(key, [...(textsBySequence.get(key) ?? []), m.text])
-    return tokens
-  })
+    const group = groups.get(key)
+    if (group) group.texts.push(m.text)
+    else groups.set(key, { tokens, texts: [m.text] })
+  }
+  const sequences = [...groups.values()].map(({ tokens, texts }) => ({ tokens, count: texts.length }))
 
   const seen = new Map<string, number>()
-  return mineTokens(tokenLists).flatMap((template) => {
-    const texts = template.members.flatMap((s) => textsBySequence.get(s.tokens.join(' ')) ?? [])
+  return mineSequences(sequences).flatMap((template) => {
+    const texts = template.members.flatMap((s) => groups.get(s.tokens.join(' '))!.texts)
     const labelled = label(template, texts)
     if (!labelled) return []
     const hash = createHash('sha1').update(template.elements.join(' ')).digest('hex').slice(0, 10)

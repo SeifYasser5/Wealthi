@@ -16,7 +16,7 @@ const QUERY = `
   FROM message m
   JOIN handle h ON m.handle_id = h.rowid
   WHERE h.id IN (SELECT value FROM json_each(?))
-  ORDER BY m.date ASC
+  ORDER BY m.date ASC, m.ROWID ASC
 `
 
 /**

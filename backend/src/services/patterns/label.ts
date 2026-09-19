@@ -1,7 +1,3 @@
-import { isPlaceholder, PUNCT, type SlotType } from './mask'
-import { SLOT, messageCount, type Template } from './mine'
-import { compile, directionOf, hasDirectionWord, slotToken, type Pattern, type Role } from './pattern'
-
 /**
  * Labelling — turns a mined template into a transaction pattern: which
  * direction, and what each slot means. Heuristics over the template's literal
@@ -9,6 +5,10 @@ import { compile, directionOf, hasDirectionWord, slotToken, type Pattern, type R
  * can't decide stays unlabelled and is listed under `review`. Templates that
  * aren't transactions (OTPs, declines, statements, promos) are dropped.
  */
+
+import { asciiDigits, isPlaceholder, PUNCT, type SlotType } from './mask'
+import { SLOT, messageCount, type Template } from './mine'
+import { compile, directionOf, hasDirectionWord, slotToken, type Pattern, type Role } from './pattern'
 
 export type Labelled = Pick<Pattern, 'type' | 'pattern' | 'reason' | 'review' | 'messages'>
 
@@ -31,6 +31,8 @@ const ACCOUNT_WORDS = /^(account|card\/account|card|حساب|بطاقه|بطاق
 const REFERENCE_WORDS = /^(ref|ref#|id)$/i
 const MERCHANT_WORDS = /^(at|in|@|payment)$/i
 const COUNTERPARTY_WORDS = /^(to|from)$/i
+/** Placeholders whose value may be an account number or a reference. */
+const ID_LIKE = new Set(['<MASKED>', '<NUM>', '<ID>'])
 /** A word of an all-caps Latin name ("JOHN", "O'NEIL") */
 const NAME_WORD = /^[A-Z][A-Z'.\-]+$/
 
@@ -61,7 +63,7 @@ function unbakeNames(elements: string[]): string[] {
   const out: string[] = []
   for (let i = 0; i < elements.length; i++) {
     out.push(elements[i])
-    if (!/^(to|from)$/.test(elements[i])) continue
+    if (!COUNTERPARTY_WORDS.test(elements[i])) continue
     let j = i + 1
     while (j < elements.length && NAME_WORD.test(elements[j])) j++
     if (j - i - 1 >= 2) {
@@ -86,7 +88,7 @@ function roleByContext(elements: string[], directionSlot: number): (Role | null)
   // References and accounts, by the word in front.
   elements.forEach((e, i) => {
     const prev = wordsBefore(elements, i, 1)[0] ?? ''
-    if (['<MASKED>', '<NUM>', '<ID>'].includes(e) && REFERENCE_WORDS.test(prev)) assign(i, 'reference')
+    if (ID_LIKE.has(e) && REFERENCE_WORDS.test(prev)) assign(i, 'reference')
     else if (e === '<MASKED>') assign(i, 'account')
     else if (e === '<NUM>' && ACCOUNT_WORDS.test(prev)) assign(i, 'account')
   })
@@ -111,11 +113,11 @@ function roleByContext(elements: string[], directionSlot: number): (Role | null)
     if (e === '<DATE>') assign(i, 'date')
     if (e === '<TIME>') assign(i, 'time')
     if (e !== SLOT) return
-    const prev = wordsBefore(elements, i, 1)[0]
+    const prev = wordsBefore(elements, i, 1)[0] ?? ''
     if (i === directionSlot) assign(i, 'direction')
-    else if (prev !== undefined && REFERENCE_WORDS.test(prev)) assign(i, 'reference')
-    else if (prev !== undefined && COUNTERPARTY_WORDS.test(prev)) assign(i, 'counterparty')
-    else if (prev !== undefined && MERCHANT_WORDS.test(prev)) assign(i, 'merchant')
+    else if (REFERENCE_WORDS.test(prev)) assign(i, 'reference')
+    else if (COUNTERPARTY_WORDS.test(prev)) assign(i, 'counterparty')
+    else if (MERCHANT_WORDS.test(prev)) assign(i, 'merchant')
     // Description straight after the date/time: "خصم … فى <DATE> <TEXT> الرصيد", "يوم <DATE> <TIME> - <TEXT>"
     else if (['<DATE>', '<TIME>'].includes(elementBefore(elements, i) ?? '')) assign(i, 'merchant')
   })
@@ -131,14 +133,18 @@ interface SlotValues {
   matched: number
 }
 
-/** The values every placeholder takes across the template's messages. */
+/**
+ * The values every placeholder takes across the template's messages. Runs on
+ * digit-normalised text, as masking and `extract()` do, so a message written
+ * with Arabic-Indic digits matches the template it was mined into.
+ */
 function slotValues(elements: string[], texts: string[]): SlotValues {
   const { re } = compile(elements.map((e) => (isPlaceholder(e) ? slotToken(null, typeOf(e)) : e)).join(' '))
   const slots = elements.flatMap((e, i) => (isPlaceholder(e) ? [i] : []))
   const values = slots.map(() => [] as string[])
   let matched = 0
   for (const text of texts) {
-    const m = re.exec(text)
+    const m = re.exec(asciiDigits(text))
     if (!m) continue
     matched++
     slots.forEach((_, g) => values[g].push(m[g + 1].trim()))
@@ -155,7 +161,7 @@ function slotValues(elements: string[], texts: string[]): SlotValues {
 function roleByValues(elements: string[], roles: (Role | null)[], { slots, values }: SlotValues): (Role | null)[] {
   const next = [...roles]
   slots.forEach((i, g) => {
-    if (next[i] !== null || !['<NUM>', '<ID>', '<MASKED>'].includes(elements[i]) || values[g].length === 0) return
+    if (next[i] !== null || !ID_LIKE.has(elements[i]) || values[g].length === 0) return
     // Money that lost the amount/balance race (e.g. an installment next to the amount)
     if (elements[i - 1] === '<CUR>' || elements[i + 1] === '<CUR>') return
     const distinct = new Set(values[g]).size
@@ -179,32 +185,30 @@ function roleByValues(elements: string[], roles: (Role | null)[], { slots, value
 export function label(template: Template, texts: string[]): Labelled | null {
   const elements = unbakeNames(template.elements)
   const literal = elements.filter((e) => !isPlaceholder(e)).join(' ')
-  const found = slotValues(elements, texts)
-  const textSlots = found.slots.flatMap((i, g) => (elements[i] === SLOT ? [{ i, g }] : []))
-  const directionSlot = textSlots.find(({ g }) => hasDirectionWord(found.values[g].join(' | ')))
   if (IGNORE_WORDS.some((re) => re.test(literal))) return null
 
-  let type: Pattern['type']
-  let reason: string
+  const found = slotValues(elements, texts)
+  const textSlots = found.slots.flatMap((i, g) => (elements[i] === SLOT ? [{ i, g }] : []))
+  // Direction from the template text; failing that, from a slot's values (by-keyword).
   const literalDirection = directionOf(literal)
-  if (literalDirection) {
-    type = literalDirection
-    reason = `${type} keyword in template text`
-  } else if (directionSlot) {
-    type = 'by-keyword'
-    reason = `direction word inside TEXT slot #${textSlots.indexOf(directionSlot) + 1}`
-  } else {
-    return null
-  }
+  const directionSlot = literalDirection
+    ? undefined
+    : textSlots.find(({ g }) => hasDirectionWord(found.values[g].join(' | ')))
+  const type: Pattern['type'] | null = literalDirection ?? (directionSlot ? 'by-keyword' : null)
+  if (!type) return null
+  const reason = directionSlot
+    ? `direction word inside TEXT slot #${textSlots.indexOf(directionSlot) + 1}`
+    : `${type} keyword in template text`
 
-  const contextRoles = roleByContext(elements, type === 'by-keyword' ? directionSlot!.i : -1)
+  const contextRoles = roleByContext(elements, directionSlot?.i ?? -1)
   const roles = roleByValues(elements, contextRoles, found)
   if (!roles.includes('amount')) return null
 
+  const messages = messageCount(template)
   const review: string[] = []
   if (found.matched < texts.length) review.push(`matches ${found.matched} of its ${texts.length} messages`)
   if (!roles.includes('account')) review.push('no account slot')
-  if (messageCount(template) === 1) review.push('seen once')
+  if (messages === 1) review.push('seen once')
   textSlots.forEach(({ i }, k) => {
     if (roles[i] === null) review.push(`unlabelled TEXT slot #${k + 1}`)
   })
@@ -214,6 +218,6 @@ export function label(template: Template, texts: string[]): Labelled | null {
     pattern: elements.map((e, i) => (isPlaceholder(e) ? slotToken(roles[i], typeOf(e)) : e)).join(' '),
     reason,
     ...(review.length ? { review } : {}),
-    messages: messageCount(template),
+    messages,
   }
 }

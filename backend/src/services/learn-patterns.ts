@@ -1,8 +1,8 @@
 import { join } from 'node:path'
 import { readMessages } from './ingest/reader'
 import { decode, DecodeError } from './ingest/decode'
-import { learnBank } from './ingest/patterns/learn'
-import { bankOf, loadPatternFiles, mergePatterns, savePatternFile } from './ingest/patterns/store'
+import { learnBank } from './patterns/learn'
+import { bankOf, loadPatternFiles, mergePatterns, savePatternFile } from './patterns/store'
 import { config } from '../utils/config'
 import type { DecodedMessage } from '../utils/types'
 
@@ -23,7 +23,9 @@ for (const row of readMessages(CHAT_DB_PATH, config.bankSenders)) {
   try {
     const message = decode(row)
     const bank = bankOf(message.sender)
-    byBank.set(bank, [...(byBank.get(bank) ?? []), message])
+    const messages = byBank.get(bank)
+    if (messages) messages.push(message)
+    else byBank.set(bank, [message])
   } catch (error) {
     if (!(error instanceof DecodeError)) throw error
     undecodable++

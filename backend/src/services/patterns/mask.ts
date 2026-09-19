@@ -73,7 +73,11 @@ export function asciiDigits(text: string): string {
 
 /** Masked token sequence of an SMS, e.g. ["charged", "with", "<CUR>", "<NUM>", "at", "ACME", "on", "<DATE>"]. */
 export function mask(text: string): string[] {
-  let masked = asciiDigits(text).replace(/\s+/g, ' ').trim()
+  let masked = asciiDigits(text)
+    .replace(/\s+/g, ' ')
+    .trim()
+    // Literal "<WORD>" in an SMS would pass for a placeholder; split its brackets off first.
+    .replace(/<([A-Z]+)>/g, '< $1 >')
   for (const { replace, re } of RULES) masked = masked.replace(re, ` ${replace} `)
 
   return (
