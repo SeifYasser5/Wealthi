@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { asciiDigits, escape, isPlaceholder, mask } from '../../src/services/patterns/mask'
-import { messageCount, mineSequences, SLOT, type Sequence } from '../../src/services/patterns/mine'
+import { messageCount, SLOT, type Sequence } from '../../src/services/patterns/mine'
+import { mineSequences } from '../../src/services/patterns/mine2'
 
 describe('mask', () => {
   it('replaces every value type with its placeholder and splits glued punctuation', () => {
@@ -55,7 +56,8 @@ describe('mask helpers', () => {
 
 const seq = (text: string, count = 1): Sequence => ({ tokens: text.split(' '), count })
 
-describe('mineSequences', () => {
+// mine2.ts, the LCS variant: not what learn.ts runs, but still maintained.
+describe('mineSequences (LCS variant)', () => {
   it('merges sequences that differ only in free text into one slot', () => {
     const [t, ...rest] = mineSequences([
       seq('Card <MASKED> charged <CUR> <NUM> at ACME', 3),
@@ -192,7 +194,7 @@ describe('mask helpers strictness', () => {
 })
 
 // Cases found by mutation testing (npm run test:mutation).
-describe('mineSequences rules', () => {
+describe('mineSequences rules (LCS variant)', () => {
   const templates = (...seqs: Sequence[]) => mineSequences(seqs).map((t) => t.elements.join(' '))
 
   it.each(['<CUR> <NUM>', '<TIME>', '<URL>'])('never lets a slot swallow %s', (value) => {

@@ -50,12 +50,20 @@ Values recognizable without knowing any template are replaced by typed placehold
 
 ### 2. Mine (`services/patterns/mine.ts`)
 
-- **Cluster.** Sequences are processed most frequent first. Each one tries to fit an existing template, otherwise merges into the best-scoring template or starts a new one.
-- **Compare.** The merge score is a longest common subsequence over tokens, a DP table in a flat `Uint16Array`. Tokens match on exact equality, except `<NUM>` and `<ID>` which are treated as equal.
-- **Threshold.** A merge needs at least 2 matched literal tokens and a literal overlap of at least 0.6.
-- **Slots.** Every gap between aligned tokens becomes a `<TEXT>` slot, at most 4 per template.
-- **Blocking.** A gap may not absorb a `<CUR>`, `<DATE>`, `<TIME>`, `<URL>`, or a `<MASKED>` that follows an account word. This keeps amounts and account numbers out of merchant fields.
-- **Variant splitting.** If a slot's first or last word takes only 2 or 3 distinct values, each seen in at least 2 sequences, the template splits on that word and each part is mined again, to depth 8. This separates template variants from free text.
+Built on one assumption that holds for the banks here: within a template exactly one run of tokens varies, the shop or the counterparty.
+
+- **Bucket.** Sequences are grouped by token count. Inside a bucket every message lines up index to index, so the positions where two sequences differ _are_ the slot. No alignment search and no similarity threshold.
+- **One run.** The differing positions must be contiguous. Two separate runs mean a second thing varies, so the merge is refused and the sequences stay apart.
+- **Widen.** Two templates that share a prefix and a suffix and differ only in the middle are one template whose slot is a different number of tokens wide, so the one-word shop bucket and the three-word shop bucket collapse into one. Refused when both middles hold the same literal word, which marks a template word the slot would swallow rather than a wider shop name.
+- **Blocking.** A slot may not absorb a `<CUR>`, `<DATE>`, `<TIME>`, `<URL>`, or a `<MASKED>` that follows an account word, and may not cover more than half a message. This keeps amounts and account numbers out of merchant fields.
+- **Variant splitting.** Widening cannot tell free text from a template word, so a slot whose first or last word takes only 2 or 3 distinct values, each seen in at least 2 sequences, is a variant: the template splits on that word and each part is mined again, to depth 8.
+- **Rescue.** A template built from fewer than 3 message shapes saw no variation, so its shop or name is still literal text. If a bigger template's slot covers those messages they move there, by what the compiled pattern accepts rather than by how masking happened to mark it.
+
+#### Two miners
+
+`mine.ts` is the one `learn.ts` runs. It is the simpler of the two and was measured against the older miner on real messages from three banks: it reproduced every pattern that carries money, byte for byte on one bank, and split direction variants into plainly typed debit and credit patterns where the older one needed a `by-keyword` indirection.
+
+`mine2.ts` is that older miner, kept and still maintained. It aligns sequences with a longest common subsequence scored on literal overlap, which makes no assumption about how many things vary, so it can describe a template with several independent slots that `mine.ts` cannot express at all. It is the more complex of the two and the more general, meant for message sets more varied than the ones here. It is still under review and is wired to nothing.
 
 ### 3. Label (`services/patterns/label.ts`)
 
@@ -113,6 +121,7 @@ Covered: masking, clustering, slot blocking and variant splitting; labelling and
 Known and deferred by choice, not undiscovered.
 
 - **Two importers.** `importer.ts` rebuilds the whole ledger on every run, which is what a still-changing pattern set needs. `importer2.ts` is the intended importer, an incremental cursor over new messages only; its design is settled and it takes over once patterns stop changing. Manual, recurring and CSV entries are left out of it on purpose while that part is reworked.
+- **Two miners.** `mine.ts` assumes one varying run per template, which is what these banks send and what the measurements support. `mine2.ts` drops that assumption and handles templates with several independent slots, for message sets more varied than mine; it is more complex, still under review, and not wired.
 - **Unmatched queue.** Unmatched messages are a count in the import summary, not a durable store or a review UI. Their text stays only in `chat.db`.
 - **Review depth.** Pattern inference was AI generated in a day and is the most complex part of the repo; its logic was reviewed line by line, its implementation was not. Parts of the frontend and API surface were also AI generated and not reviewed line by line. The ingestion pipeline and ledger logic were designed and reviewed deliberately.
 
@@ -137,7 +146,7 @@ cd ../frontend && npm run dev   # http://localhost:5173
 
 ## Reading guide
 
-1. `backend/src/services/patterns/mine.ts`: LCS clustering with typed slot blocking and recursive variant splitting. The core of template inference.
+1. `backend/src/services/patterns/mine.ts`: length bucketing with typed slot blocking, variant splitting and rescue. The core of template inference. `mine2.ts` beside it is the more general LCS variant, still under review.
 2. `backend/src/services/patterns/label.ts`: mined templates to typed patterns, from context words and value distributions.
 3. `backend/src/services/patterns/pattern.ts`: the `{role:TYPE}` format, its compiler, and the specificity-ranked whole-message `extract()`.
 4. `backend/src/services/ingest/parser.ts`: the enabled-only gate and the explicit match, skip and error results.
