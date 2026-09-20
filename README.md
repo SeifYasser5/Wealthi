@@ -111,10 +111,11 @@ All test data is synthetic. Figures measured on 2026-09-19 with Node 22.
 
 | Suite              | Statements | Branches | Functions | Lines  |
 | ------------------ | ---------- | -------- | --------- | ------ |
-| Backend (`src/**`) | 99.55%     | 97.25%   | 100%      | 99.89% |
+| Backend (`src/**`) | 99.54%     | 96.58%   | 100%      | 99.90% |
 | Frontend           | 100%       | 100%     | 100%      | 100%   |
 
-Covered: masking, clustering, slot blocking and variant splitting; labelling and stable ids; the learn CLI end to end; `extract` and specificity; parser results and rejections; the unmatched path, including that a disabled pattern never parses; the balance cascade; idempotent reimport; and every conversion in `money.ts` (35 cases). Stryker is configured but was not run for these figures.
+Covered: masking, bucketing and widening, slot blocking, variant splitting and rescue for the wired
+miner and clustering for the LCS one; labelling and stable ids; the learn CLI end to end; `extract` and specificity; parser results and rejections; the unmatched path, including that a disabled pattern never parses; the balance cascade; idempotent reimport; and every conversion in `money.ts` (35 cases). Stryker is configured but was not run for these figures.
 
 ## Scope
 
