@@ -47,7 +47,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-      # npm 10's arborist crashes on this tree (see CLAUDE.md).
+      # npm 10's arborist crashes on this tree (see AGENTS.md).
       - run: npx -y npm@11 ci
         working-directory: .
       - run: npx prisma generate
