@@ -139,7 +139,6 @@ dist
 # Learned SMS patterns (mined from your own messages)
 backend/config/
 backend/data/
-.claude/
 
 # Playwright
 /test-results/
