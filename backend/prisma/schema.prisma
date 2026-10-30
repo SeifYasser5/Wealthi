@@ -50,6 +50,11 @@ model Transaction {
   /// chat.db message.ROWID this row was derived from — kept for debugging and
   /// for rebuilding the import cursor if import_state is ever lost.
   sourceRowid     BigInt?         @map("source_rowid")
+  /// The SMS body this row was parsed from, cleaned by sanitizeMessageText()
+  /// so it is the readable message and nothing else. Shown in the transaction
+  /// detail modal and used to diagnose a mis-parse without chat.db.
+  /// Null for non-SMS rows (manual entries / CSV legs).
+  rawText         String?         @map("raw_text")
 
   @@index([yearMonth, account])
   @@index([yearMonth, category])

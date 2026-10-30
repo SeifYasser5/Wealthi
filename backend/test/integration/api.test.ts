@@ -1,5 +1,5 @@
 import request from 'supertest'
-import type { BalancesResponse, SpendingResponse } from '@wealthi/shared'
+import type { BalancesResponse, SpendingResponse, TransactionsResponse } from '@wealthi/shared'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import app from '../../src/app'
 import { prisma } from '../../src/db/client'
@@ -49,6 +49,12 @@ describe('GET /api/transactions', () => {
     const exclude = await request(app).get('/api/transactions?transfer=exclude').expect(200)
     expect(only.body.count).toBe(2)
     expect(exclude.body.count).toBe(5)
+  })
+
+  it('serves the SMS each row was parsed from, for the detail view', async () => {
+    const res = await request(app).get('/api/transactions?yearMonth=2026-02').expect(200)
+    const row = (res.body as TransactionsResponse).transactions.find((t) => t.merchant === 'CITY CAFE')
+    expect(row?.rawText).toContain('CITY CAFE')
   })
 
   it.each([

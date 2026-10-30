@@ -46,12 +46,24 @@ describe('Transactions page', () => {
     expect(within(total).getByText('20')).toHaveClass('text-positive') // USD
   })
 
+  it('totals the discrepancy across the rows that have one', async () => {
+    api.transactions[0].reportedBalance = 5700 // computed 5750 → −50
+    renderApp(JAN)
+    const table = await screen.findByRole('table')
+    const total = within(within(table).getAllByRole('rowgroup')[1]).getByRole('row')
+    const cells = within(total).getAllByRole('cell')
+    expect(cells[7]).toHaveTextContent('-50')
+    expect(within(cells[7]).getByText('-50')).toHaveClass('text-warning')
+  })
+
   it('flags a computed balance that disagrees with the bank', async () => {
     api.transactions[0].reportedBalance = 5700
     renderApp(JAN)
     const [first] = await ledgerRows()
     expect(first.slice(5)).toEqual(['5,700', '5,750', '-50'])
-    expect(screen.getByText('-50')).toHaveClass('text-warning')
+    // Scoped to the body: the total row carries the same −50.
+    const body = within(await screen.findByRole('table')).getAllByRole('rowgroup')[2]
+    expect(within(body).getByText('-50')).toHaveClass('text-warning')
   })
 
   it('shows the empty state for a month with nothing in it', async () => {
@@ -201,5 +213,93 @@ describe('Transactions page', () => {
     expect(await screen.findByText('1 transaction', { selector: 'span' })).toBeInTheDocument()
     expect(currentUrl().search).toBe('?yearMonth=2026-01&transfer=only')
     expect(selects()[COUNTER]).toBeEnabled()
+  })
+})
+
+describe('Transaction detail modal', () => {
+  /** Opens the modal for a body row by index (0 = newest). */
+  async function openRow(user: ReturnType<typeof renderApp>['user'], index: number) {
+    const table = await screen.findByRole('table')
+    const body = within(table).getAllByRole('rowgroup')[2]
+    await user.click(within(body).getAllByRole('row')[index])
+    return screen.getByRole('dialog')
+  }
+
+  it('opens on a row click with the record and the bank message', async () => {
+    const { user } = renderApp(JAN)
+    const dialog = await openRow(user, 1) // EMPLOYER LTD, the row with a rawText
+    expect(within(dialog).getByRole('heading', { name: 'EMPLOYER LTD' })).toBeInTheDocument()
+    expect(within(dialog).getByText('Jan 15, 2026')).toBeInTheDocument()
+    expect(within(dialog).getByText('5,000 EGP')).toHaveClass('text-positive')
+    expect(within(dialog).getByText('Checking')).toBeInTheDocument()
+    expect(within(dialog).getByText('2026-01')).toBeInTheDocument()
+    expect(
+      within(dialog).getByText('Account *1111 credited with EGP 5,000.00 from EMPLOYER LTD. Balance EGP 6,000.00'),
+    ).toBeInTheDocument()
+  })
+
+  it('shows the counter account of a transfer and a debit in red', async () => {
+    const { user } = renderApp(JAN)
+    const dialog = await openRow(user, 0) // CARD PAYMENT, transfer to the card
+    expect(within(dialog).getByText('250 EGP')).toHaveClass('text-negative')
+    expect(within(dialog).getByText('Credit Card')).toBeInTheDocument()
+  })
+
+  it('says so when a row has no message, merchant, category or reported balance', async () => {
+    const { user } = renderApp(JAN)
+    const dialog = await openRow(user, 3) // the USD credit: merchant null, nothing reported
+    expect(within(dialog).getByRole('heading', { name: 'No merchant' })).toBeInTheDocument()
+    expect(within(dialog).getByText('No message stored for this transaction.')).toBeInTheDocument()
+    expect(within(dialog).getAllByText('—').length).toBe(3) // category, reported balance, transfer
+  })
+
+  it('shows the category when one is set', async () => {
+    api.transactions[1].category = 'Rent'
+    const { user } = renderApp(JAN)
+    expect(within(await openRow(user, 1)).getByText('Rent')).toBeInTheDocument()
+  })
+
+  it('opens from the keyboard with Enter and with Space, and ignores other keys', async () => {
+    const { user } = renderApp(JAN)
+    const table = await screen.findByRole('table')
+    const row = within(within(table).getAllByRole('rowgroup')[2]).getAllByRole('row')[1]
+
+    row.focus()
+    await user.keyboard('{ArrowDown}')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    await user.keyboard('{Enter}')
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+
+    row.focus()
+    await user.keyboard(' ')
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+
+  it.each([
+    [
+      'the close button',
+      async (user: ReturnType<typeof renderApp>['user']) => user.click(screen.getByLabelText('Close')),
+    ],
+    ['Escape', async (user: ReturnType<typeof renderApp>['user']) => user.keyboard('{Escape}')],
+    [
+      'the backdrop',
+      async (user: ReturnType<typeof renderApp>['user']) => user.click(screen.getByTestId('modal-backdrop')),
+    ],
+  ])('closes on %s', async (_, close) => {
+    const { user } = renderApp(JAN)
+    await openRow(user, 1)
+    await close(user)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('stays open on a click inside the panel and on any key but Escape', async () => {
+    const { user } = renderApp(JAN)
+    const dialog = await openRow(user, 1)
+    await user.click(within(dialog).getByRole('heading', { name: 'EMPLOYER LTD' }))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    await user.keyboard('{Enter}')
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 })

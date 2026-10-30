@@ -19,20 +19,27 @@ export async function importFromChatDb(chatDbPath: string): Promise<ImportSummar
 
   const messages = readMessages(chatDbPath, config.bankSenders, undefined)
   const { transactions, errors, earliest } = stageMessages(messages)
+  // No SMS transaction means an empty or unreadable chat.db: keep the stored
+  // ledger rather than rebuilding it out of the config entries alone.
   if (transactions.length === 0 || earliest === null) return { months: 0, totalStored: 0, errors }
-  const { balances, months } = await recomputeBalances(transactions)
+
+  // Manual and recurring entries are part of the ledger, not just of the
+  // balance math: they are stored next to the SMS rows so the transactions API
+  // shows the same set of rows the balances were computed from.
+  const stored = [...manualTransactions, ...transactions]
+  const { balances, months } = await recomputeBalances(stored)
 
   await prisma.$transaction(
     async (db) => {
       await db.monthlyBalance.deleteMany({})
       await db.transaction.deleteMany({})
-      await createAllTransactions(transactions, db)
+      await createAllTransactions(stored, db)
       await upsertAllBalances(balances, db)
     },
     { timeout: 120_000 },
   )
 
-  return { months, totalStored: transactions.length, errors }
+  return { months, totalStored: stored.length, errors }
 }
 
 function stageMessages(messages: DbRow[]): StageMessages {
@@ -62,10 +69,11 @@ function stageMessages(messages: DbRow[]): StageMessages {
   return { transactions, errors, earliest, maxRowid }
 }
 
+// `staged` already carries the manual and recurring entries; only the CSV rows
+// are still balance-only, loaded per month below.
 async function recomputeBalances(staged: StagedTransaction[]): RecomputeBalance {
-  const stored = manualTransactions
-  const byMonth = groupByMonth([...stored, ...staged])
-  const months = [...byMonth.keys()].sort().slice(-6)
+  const byMonth = groupByMonth(staged)
+  const months = [...byMonth.keys()].sort().slice(-10)
   const balances: MinorBalance[] = []
   let opening = { ...config.openingBalances }
 

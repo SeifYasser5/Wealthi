@@ -3,6 +3,7 @@ import { ACCOUNTS, accountFor } from '../../utils/config'
 import { CURRENCIES, extract, type Pattern, type PatternFile } from '../patterns/pattern'
 import { loadPatternFiles } from '../patterns/store'
 import { parseMinor, type Minor } from '../../utils/money'
+import { sanitizeMessageText } from './sanitize'
 
 /**
  * Parses bank SMS with the enabled patterns in config/patterns.
@@ -97,6 +98,9 @@ export function createPatternParser(files: PatternFile[]): (message: DecodedMess
         transactedAt: message.messageDate,
         messageGuid: message.guid,
         sourceRowid: message.rowid,
+        // Stored for display and diagnosis, cleaned of invisible characters —
+        // unlike the text handed to extract() above, which stays byte-exact.
+        rawText: sanitizeMessageText(message.text),
       },
     }
   }

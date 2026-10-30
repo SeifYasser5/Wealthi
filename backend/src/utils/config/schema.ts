@@ -159,28 +159,16 @@ export const WealthiConfigSchema = z
     csvImports: z.array(CsvImport).default([]),
   })
   .superRefine((config, ctx) => {
-    // Cross-references: every account named anywhere must be declared in `accounts`.
+    // Only the two cross-references that no amount of pruning can repair stay
+    // fatal: a duplicate id makes `accounts` ambiguous, and a declared account
+    // with no opening balance has no number to start its first month from —
+    // inventing one would silently invent money. References *to* an account
+    // that is no longer declared are dropped instead, by pruneUnknownAccounts.
     const ids = new Set<string>()
     config.accounts.forEach((a, i) => {
       if (ids.has(a.id))
         ctx.addIssue({ code: 'custom', path: ['accounts', i, 'id'], message: `duplicate id "${a.id}"` })
       ids.add(a.id)
-    })
-
-    const check = (id: string | undefined, ...path: PropertyKey[]) => {
-      if (id !== undefined && !ids.has(id)) ctx.addIssue({ code: 'custom', path, message: `unknown account "${id}"` })
-    }
-    for (const [source, id] of Object.entries(config.accountSources)) check(id, 'accountSources', source)
-    for (const id of Object.keys(config.openingBalances)) check(id, 'openingBalances', id)
-    config.transferRules.forEach((r, i) => {
-      check(r.account, 'transferRules', i, 'account')
-      check(r.counterAccount, 'transferRules', i, 'counterAccount')
-    })
-    config.recurringTransactions.forEach((e, i) => check(e.account, 'recurringTransactions', i, 'account'))
-    config.manualTransactions.forEach((e, i) => check(e.account, 'manualTransactions', i, 'account'))
-    config.csvImports.forEach((c, i) => {
-      check(c.account, 'csvImports', i, 'account')
-      check(c.counterAccount, 'csvImports', i, 'counterAccount')
     })
 
     for (const id of ids) {
@@ -195,3 +183,97 @@ export type ManualEntry = z.infer<typeof ManualEntry>
 export type RecurringEntry = z.infer<typeof RecurringEntry>
 export type TransferRule = z.infer<typeof TransferRule>
 export type CsvImport = z.infer<typeof CsvImport>
+
+/** One reference that named an account `accounts` no longer declares. */
+export type DroppedRef = {
+  /** Where it sat in the file, e.g. `transferRules[3].counterAccount`. */
+  path: string
+  /** The account id that is not declared. */
+  account: string
+  /** What dropping it costs, so the startup warning can say. */
+  effect: 'tag only' | 'no longer imported' | 'none'
+}
+
+/**
+ * Drop every reference to an account that `accounts` no longer declares, and
+ * report what went.
+ *
+ * Deleting an account from `accounts` leaves references behind in up to seven
+ * other keys, and a stale transfer rule is a poor reason to refuse to start.
+ * So the loader prunes rather than throws — but never silently: `dropped` is
+ * what the startup warning prints, because two of these do move money.
+ *
+ * Per-key reasoning:
+ * - `accountSources` — the source stops resolving, so messages on it become
+ *   collected parse errors ("no account mapped for source"), as they already
+ *   would for an unmapped card.
+ * - `openingBalances` — a key for an undeclared account is dead weight; no
+ *   month reads it.
+ * - `transferRules` — a transfer is a tag, not a type, so the leg still lands
+ *   as a plain debit/credit and balances are unaffected. Only the tag is lost.
+ * - `manualTransactions` / `recurringTransactions` — these are real rows in
+ *   `transactions` *and* in the balance math. Dropping them changes balances.
+ * - `csvImports` — an unknown `account` leaves the rows nowhere to land, so the
+ *   whole import goes (changing balances). An unknown `counterAccount` is only
+ *   the transfer tag, so the rows are kept and the tag cleared.
+ */
+export function pruneUnknownAccounts(config: WealthiConfig): { config: WealthiConfig; dropped: DroppedRef[] } {
+  const ids = new Set(config.accounts.map((a) => a.id))
+  const dropped: DroppedRef[] = []
+  const drop = (path: string, account: string, effect: DroppedRef['effect']) => {
+    dropped.push({ path, account, effect })
+    return false
+  }
+  const keep = (id: string) => ids.has(id)
+
+  const accountSources = Object.fromEntries(
+    Object.entries(config.accountSources).filter(
+      ([source, id]) => keep(id) || drop(`accountSources["${source}"]`, id, 'no longer imported'),
+    ),
+  )
+
+  const openingBalances = Object.fromEntries(
+    Object.entries(config.openingBalances).filter(([id]) => keep(id) || drop(`openingBalances["${id}"]`, id, 'none')),
+  )
+
+  const transferRules = config.transferRules.filter((r, i) => {
+    const stale = !keep(r.account) ? (['account', r.account] as const) : null
+    const side = stale ?? (!keep(r.counterAccount) ? (['counterAccount', r.counterAccount] as const) : null)
+    if (side === null) return true
+    return drop(`transferRules[${i}].${side[0]} (id "${r.id}")`, side[1], 'tag only')
+  })
+
+  const recurringTransactions = config.recurringTransactions.filter(
+    (e, i) => keep(e.account) || drop(`recurringTransactions[${i}]`, e.account, 'no longer imported'),
+  )
+
+  const manualTransactions = config.manualTransactions.filter(
+    (e, i) => keep(e.account) || drop(`manualTransactions[${i}]`, e.account, 'no longer imported'),
+  )
+
+  // One pass, so a dropped import can't shift the index a later path reports.
+  const csvImports = config.csvImports.flatMap((c, i) => {
+    if (!keep(c.account)) {
+      drop(`csvImports[${i}].account (id "${c.id}")`, c.account, 'no longer imported')
+      return []
+    }
+    if (c.counterAccount !== undefined && !keep(c.counterAccount)) {
+      drop(`csvImports[${i}].counterAccount (id "${c.id}")`, c.counterAccount, 'tag only')
+      return [{ ...c, counterAccount: undefined }]
+    }
+    return [c]
+  })
+
+  return {
+    config: {
+      ...config,
+      accountSources,
+      openingBalances,
+      transferRules,
+      recurringTransactions,
+      manualTransactions,
+      csvImports,
+    },
+    dropped,
+  }
+}

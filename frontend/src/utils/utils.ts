@@ -111,6 +111,26 @@ export function isBalanced(discrepancy: number): boolean {
   return Math.abs(discrepancy) < BALANCE_TOLERANCE
 }
 
+/**
+ * Signed sum of the per-row discrepancies (reported minus computed) for one
+ * currency, or null when no row in that currency has both numbers to compare.
+ * `computed` is the `buildComputedBalances` output, indexed alongside `txs`.
+ */
+export function discrepancyByCurrency(
+  txs: Transaction[],
+  computed: (number | null)[],
+  currency: Currency,
+): number | null {
+  let total: number | null = null
+  for (let i = 0; i < txs.length; i++) {
+    const tx = txs[i]
+    const base = computed[i]
+    if (tx.currency !== currency || base == null || tx.reportedBalance == null) continue
+    total = (total ?? 0) + (tx.reportedBalance - base)
+  }
+  return total
+}
+
 export function buildComputedBalances(transactions: Transaction[]): (number | null)[] {
   const out: (number | null)[] = new Array(transactions.length).fill(null)
   for (let i = transactions.length - 2; i >= 0; i--) {

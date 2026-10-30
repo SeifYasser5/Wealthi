@@ -155,6 +155,19 @@ describe('parser rejections', () => {
       },
     })
   })
+
+  it('stores the message as rawText, cleaned of invisible characters', () => {
+    // An NBSP inside the merchant: the matcher sees the bytes as they arrived,
+    // so the pattern still matches, and the stored copy is the readable text.
+    const noisy = 'Your card ending *2222 was charged EGP 250.00 at ACME\u00A0GROCERS. Available balance EGP 4,750.00'
+    expect(parser(message(noisy))).toMatchObject({
+      ok: true,
+      value: {
+        merchant: 'ACME\u00A0GROCERS',
+        rawText: 'Your card ending *2222 was charged EGP 250.00 at ACME GROCERS. Available balance EGP 4,750.00',
+      },
+    })
+  })
 })
 
 describe('ParseError', () => {

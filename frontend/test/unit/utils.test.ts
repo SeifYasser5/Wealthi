@@ -3,6 +3,7 @@ import {
   amountColor,
   buildComputedBalances,
   currentYearMonth,
+  discrepancyByCurrency,
   formatDate,
   formatDay,
   formatYearMonth,
@@ -99,6 +100,24 @@ describe('isBalanced', () => {
     expect(isBalanced(-0.0049)).toBe(true)
     expect(isBalanced(0.005)).toBe(false)
     expect(isBalanced(-1)).toBe(false)
+  })
+})
+
+describe('discrepancyByCurrency', () => {
+  it('sums reported minus computed per currency, skipping rows missing either side', () => {
+    const txs = [
+      tx({ type: 'debit', amount: 10, reportedBalance: 100 }), // computed 90 → +10
+      tx({ type: 'debit', amount: 10, reportedBalance: 40 }), // no computed balance → skipped
+      tx({ type: 'credit', amount: 10 }), // no reported balance → skipped
+      tx({ type: 'credit', amount: 2, currency: 'USD', reportedBalance: 7 }), // computed 12 → −5
+    ]
+    expect(discrepancyByCurrency(txs, [90, null, 30, 12], 'EGP')).toBe(10)
+    expect(discrepancyByCurrency(txs, [90, null, 30, 12], 'USD')).toBe(-5)
+  })
+
+  it('is null when no row in the currency has both numbers', () => {
+    expect(discrepancyByCurrency([tx({ type: 'debit', amount: 1, reportedBalance: 100 })], [null], 'EGP')).toBeNull()
+    expect(discrepancyByCurrency([], [], 'USD')).toBeNull()
   })
 })
 

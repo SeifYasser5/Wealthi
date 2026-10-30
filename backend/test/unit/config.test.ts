@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 import type { z } from 'zod'
-import { WealthiConfigSchema } from '../../src/utils/config/schema'
+import { WealthiConfigSchema, pruneUnknownAccounts } from '../../src/utils/config/schema'
 
 type ConfigInput = z.input<typeof WealthiConfigSchema>
 type CsvInput = NonNullable<ConfigInput['csvImports']>[number]
@@ -71,7 +71,7 @@ describe('WealthiConfigSchema', () => {
     expect(issues(c)).toContain('accounts.2.id: duplicate id "a"')
   })
 
-  it('rejects references to unknown accounts everywhere they appear', () => {
+  it('accepts references to unknown accounts, leaving them for the prune', () => {
     const c = valid()
     c.accountSources['bank:2'] = 'x'
     c.openingBalances = { ...c.openingBalances, y: 0 }
@@ -79,18 +79,7 @@ describe('WealthiConfigSchema', () => {
     c.recurringTransactions[0].account = 'x3'
     c.manualTransactions[0].account = 'x4'
     c.csvImports[0] = { ...c.csvImports[0], account: 'x5', counterAccount: 'x6' }
-    expect(issues(c)).toEqual(
-      expect.arrayContaining([
-        'accountSources.bank:2: unknown account "x"',
-        'openingBalances.y: unknown account "y"',
-        'transferRules.0.account: unknown account "x1"',
-        'transferRules.0.counterAccount: unknown account "x2"',
-        'recurringTransactions.0.account: unknown account "x3"',
-        'manualTransactions.0.account: unknown account "x4"',
-        'csvImports.0.account: unknown account "x5"',
-        'csvImports.0.counterAccount: unknown account "x6"',
-      ]),
-    )
+    expect(issues(c)).toEqual([])
   })
 
   it('requires an opening balance for every account', () => {
@@ -157,6 +146,91 @@ describe('WealthiConfigSchema', () => {
   })
 })
 
+describe('pruneUnknownAccounts', () => {
+  /** `valid()` with `b` deleted, standing in for an account removed by hand. */
+  const withoutB = () => {
+    const c = valid()
+    c.accounts = c.accounts.filter((a) => a.id !== 'b')
+    delete c.openingBalances.b
+    return WealthiConfigSchema.parse(c)
+  }
+
+  it('keeps a config that names no unknown account untouched', () => {
+    const parsed = WealthiConfigSchema.parse(valid())
+    const { config, dropped } = pruneUnknownAccounts(parsed)
+    expect(dropped).toEqual([])
+    expect(config).toEqual(parsed)
+  })
+
+  it('drops every reference to a removed account and says what each cost', () => {
+    const { config, dropped } = pruneUnknownAccounts(withoutB())
+    // `b` was only ever the counterAccount of the transfer rule and the csv import.
+    expect(dropped).toEqual([
+      { path: 'transferRules[0].counterAccount (id "r")', account: 'b', effect: 'tag only' },
+      { path: 'csvImports[0].counterAccount (id "c")', account: 'b', effect: 'tag only' },
+    ])
+    expect(config.transferRules).toEqual([])
+    // The csv rows still land on `a`; only the transfer tag is gone.
+    expect(config.csvImports).toHaveLength(1)
+    expect(config.csvImports[0].counterAccount).toBeUndefined()
+    expect(config.csvImports[0].account).toBe('a')
+  })
+
+  it('prunes accountSources and openingBalances keys for undeclared accounts', () => {
+    const c = valid()
+    c.accountSources['bank:2'] = 'gone'
+    c.openingBalances = { ...c.openingBalances, gone: 500 }
+    const { config, dropped } = pruneUnknownAccounts(WealthiConfigSchema.parse(c))
+    expect(config.accountSources).toEqual({ 'bank:1': 'a' })
+    expect(config.openingBalances).toEqual({ a: 0, b: 0 })
+    expect(dropped).toEqual([
+      { path: 'accountSources["bank:2"]', account: 'gone', effect: 'no longer imported' },
+      { path: 'openingBalances["gone"]', account: 'gone', effect: 'none' },
+    ])
+  })
+
+  it('drops manual and recurring entries on an undeclared account as balance-changing', () => {
+    const c = valid()
+    c.recurringTransactions[0].account = 'gone'
+    c.manualTransactions[0].account = 'gone'
+    const { config, dropped } = pruneUnknownAccounts(WealthiConfigSchema.parse(c))
+    expect(config.recurringTransactions).toEqual([])
+    expect(config.manualTransactions).toEqual([])
+    expect(dropped).toEqual([
+      { path: 'recurringTransactions[0]', account: 'gone', effect: 'no longer imported' },
+      { path: 'manualTransactions[0]', account: 'gone', effect: 'no longer imported' },
+    ])
+  })
+
+  it('drops a whole csv import when its own account is undeclared', () => {
+    const c = valid()
+    c.csvImports[0] = { ...c.csvImports[0], account: 'gone' }
+    const { config, dropped } = pruneUnknownAccounts(WealthiConfigSchema.parse(c))
+    expect(config.csvImports).toEqual([])
+    expect(dropped).toEqual([{ path: 'csvImports[0].account (id "c")', account: 'gone', effect: 'no longer imported' }])
+  })
+
+  it('reports a transfer rule by the side that is stale', () => {
+    const c = valid()
+    c.transferRules[0] = { ...c.transferRules[0], account: 'gone' }
+    expect(pruneUnknownAccounts(WealthiConfigSchema.parse(c)).dropped).toEqual([
+      { path: 'transferRules[0].account (id "r")', account: 'gone', effect: 'tag only' },
+    ])
+  })
+
+  it('reports later csv imports at their original index after an earlier one is dropped', () => {
+    const c = valid()
+    const second: CsvInput = { ...c.csvImports[0], id: 'c2', counterAccount: 'gone' }
+    c.csvImports = [{ ...c.csvImports[0], account: 'gone' }, second]
+    const { config, dropped } = pruneUnknownAccounts(WealthiConfigSchema.parse(c))
+    expect(dropped.map((d) => d.path)).toEqual([
+      'csvImports[0].account (id "c")',
+      'csvImports[1].counterAccount (id "c2")',
+    ])
+    expect(config.csvImports.map((i) => i.id)).toEqual(['c2'])
+  })
+})
+
 describe('config loading', () => {
   const dir = mkdtempSync(join(tmpdir(), 'wealthi-config-'))
   afterAll(() => rmSync(dir, { recursive: true, force: true }))
@@ -203,6 +277,59 @@ describe('config loading', () => {
     expect(error).toMatch(/^Invalid .*bad\.json:/)
     expect(error).toMatch(/bankSenders/)
     expect(error).toMatch(/missing opening balance/)
+  })
+
+  it('warns and prunes, rather than failing, when the file names a removed account', async () => {
+    const file = join(dir, 'stale.json')
+    const c = valid()
+    c.accounts = c.accounts.filter((a) => a.id !== 'b')
+    delete c.openingBalances.b
+    writeFileSync(file, JSON.stringify(c))
+    vi.stubEnv('WEALTHI_CONFIG_PATH', file)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const mod = await load()
+    expect(mod.ALL_ACCOUNTS).toEqual(['a'])
+    expect(mod.config.transferRules).toEqual([])
+
+    const message = warn.mock.calls[0]?.[0] as string
+    expect(message).toMatch(/dropped 2 entries referencing 1 undeclared account/)
+    expect(message).toMatch(/transferRules\[0\]\.counterAccount \(id "r"\) -> "b" \(tag only\)/)
+    warn.mockRestore()
+  })
+
+  it('counts a single dropped entry, and several accounts, in the warning', async () => {
+    const one = join(dir, 'one-stale.json')
+    const c = valid()
+    // Only the transfer rule names `b`, so exactly one entry is dropped.
+    c.csvImports[0] = { ...c.csvImports[0], counterAccount: undefined }
+    c.accounts = c.accounts.filter((a) => a.id !== 'b')
+    delete c.openingBalances.b
+    writeFileSync(one, JSON.stringify(c))
+    vi.stubEnv('WEALTHI_CONFIG_PATH', one)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await load()
+    expect(warn.mock.calls[0]?.[0]).toMatch(/dropped 1 entry referencing 1 undeclared account:/)
+    expect(warn.mock.calls[0]?.[0]).toMatch(/Add it back to "accounts"/)
+
+    // Two undeclared accounts: `b` on the rule, plus an unmapped source.
+    warn.mockClear()
+    vi.resetModules()
+    const two = join(dir, 'two-stale.json')
+    c.accountSources['bank:2'] = 'gone'
+    writeFileSync(two, JSON.stringify(c))
+    vi.stubEnv('WEALTHI_CONFIG_PATH', two)
+    await load()
+    expect(warn.mock.calls[0]?.[0]).toMatch(/dropped 2 entries referencing 2 undeclared accounts:/)
+    expect(warn.mock.calls[0]?.[0]).toMatch(/Add them back to "accounts"/)
+    warn.mockRestore()
+  })
+
+  it('stays silent when nothing is pruned', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await load()
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
   })
 
   it('accepts the committed example config', async () => {

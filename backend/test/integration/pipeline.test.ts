@@ -55,6 +55,11 @@ describe('importFromChatDb', () => {
     expect(rows.every((r) => r.messageGuid?.startsWith('fixture-') && r.sourceRowid !== null)).toBe(true)
   })
 
+  it('stores the SMS body each row was parsed from', async () => {
+    const row = await prisma.transaction.findFirstOrThrow({ where: { merchant: 'CITY CAFE' } })
+    expect(row.rawText).toContain('CITY CAFE')
+  })
+
   it('decodes a message that only has an attributedBody', async () => {
     const row = await prisma.transaction.findFirstOrThrow({ where: { yearMonth: '2026-02', account: 'checking' } })
     expect(row.reportedBalance?.toNumber()).toBe(6950)

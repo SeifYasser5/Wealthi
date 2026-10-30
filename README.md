@@ -38,7 +38,7 @@ The import runs once, when the server starts (`backend/src/server.ts`), through 
 
 **Parse.** `services/ingest/parser.ts` looks up the sender's enabled patterns and calls `extract()` in `services/patterns/pattern.ts`. It checks direction, amount, currency and account, maps the source key `<bank>:<last 4 digits>` to a configured account, and compares the message currency with the account's currency. Every outcome is explicit: a transaction, a skip, or a `ParseError`.
 
-**Classify, recompute, persist.** `transfer.ts` sets `counterAccount` from `transferRules`. `recomputeBalances` merges parsed rows with manual, recurring and CSV entries from config and calls `computeBalance` per account per touched month. `importer.ts` writes everything in one `prisma.$transaction`.
+**Classify, recompute, persist.** `transfer.ts` sets `counterAccount` from `transferRules`. Manual and recurring entries from config join the parsed rows as transactions; `recomputeBalances` adds the CSV entries on top and calls `computeBalance` per account per touched month. `importer.ts` writes everything in one `prisma.$transaction`.
 
 ## Template inference
 
@@ -142,6 +142,8 @@ npm run patterns:learn          # then set "enabled": true in config/patterns/<b
 npm run dev                     # API on http://127.0.0.1:3000, imports on start
 cd ../frontend && npm run dev   # http://localhost:5173
 ```
+
+**Removing an account.** `accounts` in `wealthi.json` is referenced from six other keys, so deleting an entry leaves those references dangling. The server no longer refuses to start over them: it drops each one and prints what went, and what it cost, to stderr. Dropped `transferRules` and `csvImports[].counterAccount` entries cost only the transfer tag, so balances are unchanged; a dropped `accountSources` mapping, manual entry, recurring entry or whole `csvImports` entry was **in the balance math**, so balances will move on the next import. The startup warning is the list of entries to clean up. Two things are still fatal, because neither can be fixed without inventing a number: a duplicate account id, and a declared account with no `openingBalances` entry.
 
 `npm run test:e2e` from the repo root runs Playwright against a throwaway Postgres seeded from a synthetic `chat.db`, and tears it down afterwards. Needs Docker.
 

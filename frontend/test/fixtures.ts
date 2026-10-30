@@ -25,6 +25,7 @@ export function tx(over: Partial<Transaction> & Pick<Transaction, 'type' | 'amou
     transactedAt: '2026-01-10T12:00:00.000Z',
     createdAt: '2026-01-10T12:00:00.000Z',
     isTransfer: false,
+    rawText: null,
     ...over,
   }
 }
@@ -48,6 +49,7 @@ export const JANUARY: Transaction[] = [
     merchant: 'EMPLOYER LTD',
     reportedBalance: 6000,
     transactedAt: '2026-01-15T12:00:00.000Z',
+    rawText: 'Account *1111 credited with EGP 5,000.00 from EMPLOYER LTD. Balance EGP 6,000.00',
   }),
   tx({
     type: 'debit',

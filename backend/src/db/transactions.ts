@@ -36,6 +36,8 @@ function mapRow(row: PrismaRow): StoredTransaction {
     counterAccount: row.counterAccount as AccountId | null,
     reportedBalance: row.reportedBalance === null ? null : decimalToMinor(row.reportedBalance),
     transactedAt: row.transactedAt,
+    // The cleaned SMS body this row was parsed from; null on manual/CSV rows.
+    rawText: row.rawText,
     // Derived from counterAccount at extraction time — not a stored column.
     isTransfer: row.counterAccount !== null,
   }
@@ -59,7 +61,7 @@ function toApi(tx: StoredTransaction): OurTransaction {
 // ---------------------------------------------------------------------------
 
 function toCreateData(
-  tx: ParsedTransaction & { messageGuid?: string | null; sourceRowid?: bigint | null },
+  tx: ParsedTransaction & { messageGuid?: string | null; sourceRowid?: bigint | null; rawText?: string | null },
   yearMonth: string,
 ): Prisma.TransactionCreateInput {
   return {
@@ -77,6 +79,7 @@ function toCreateData(
     // constraint on messageGuid is what makes re-reads idempotent.
     messageGuid: tx.messageGuid ?? null,
     sourceRowid: tx.sourceRowid ?? null,
+    rawText: tx.rawText ?? null,
   }
 }
 

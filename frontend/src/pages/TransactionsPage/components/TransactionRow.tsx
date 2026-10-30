@@ -4,15 +4,36 @@ import type { Transaction } from '@wealthi/shared'
 
 /**
  * One transaction. `computed` is the running balance the table derived for
- * this row, or null when there is nothing to derive it from.
+ * this row, or null when there is nothing to derive it from. `onSelect` opens
+ * the detail modal; the row keeps its table semantics and takes Enter/Space
+ * rather than posing as a button.
  */
-export function TransactionRow({ tx, computed }: { tx: Transaction; computed: number | null | undefined }) {
+export function TransactionRow({
+  tx,
+  computed,
+  onSelect,
+}: {
+  tx: Transaction
+  computed: number | null | undefined
+  onSelect: () => void
+}) {
   const { label: accountLabel } = useAccounts()
   const discrepancy = computed != null && tx.reportedBalance != null ? tx.reportedBalance - computed : null
   const matches = discrepancy != null && isBalanced(discrepancy)
 
   return (
-    <tr className="transition hover:bg-surface-hover">
+    <tr
+      className="cursor-pointer transition hover:bg-surface-hover focus:bg-surface-hover focus:outline-none"
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return
+        // Space would scroll the page instead of opening the row.
+        e.preventDefault()
+        onSelect()
+      }}
+      tabIndex={0}
+      aria-haspopup="dialog"
+    >
       <td className="whitespace-nowrap px-4 py-3 text-subtle">{formatDate(tx.transactedAt)}</td>
       <td className="whitespace-nowrap px-4 py-3 text-foreground">{accountLabel(tx.account)}</td>
       <td className="px-4 py-3 text-foreground">

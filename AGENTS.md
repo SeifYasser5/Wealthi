@@ -93,7 +93,8 @@ missing it is skipped and the server serves what is already in Postgres.
 | Writes | **deletes all rows** in `transactions` + `monthly_balances`, then re-inserts | inserts new rows, upserts touched months |
 | Months | re-inserts every transaction, but computes balances for the **last 6** months only (`.slice(-6)`) | recomputes from the earliest touched month forward |
 | Opening balances | `config.openingBalances` seeds the first of those 6 months | `openingFor()` reads the prior month's closing from the DB |
-| Manual / CSV entries | merged into the balance math, **not** inserted into `transactions` | not merged |
+| Manual / recurring entries | inserted into `transactions` **and** merged into the balance math | not merged |
+| CSV entries | merged into the balance math, **not** inserted into `transactions` | not merged |
 
 So the live path is a **destructive full rebuild of a rolling 6-month window**, and
 `config.openingBalances` must be the balance at the **start of that window**, not at genesis — it
@@ -118,11 +119,27 @@ source of truth; `monthly_balances` is a derived snapshot per `(year_month, acco
 is the `importer2.ts` cursor. Prisma 7 takes the URL from `backend/prisma.config.ts`, not
 `schema.prisma`; the app builds its own `Pool` in `src/db/client.ts`.
 
+`transactions.raw_text` holds the SMS body a row was parsed from (null for manual/CSV rows), for
+the transaction detail modal and for diagnosing a mis-parse without `chat.db`. It is cleaned by
+`sanitizeMessageText()` (`services/ingest/sanitize.ts`) on the way in — bidi marks, zero-width
+characters, control bytes and odd spaces out — and **only on the stored copy**: the text handed to
+the pattern matcher stays byte-exact, because patterns were learned against the bytes as they
+arrive. It is served by `GET /api/transactions` like any other field.
+
 ## Private config
 
 Everything personal lives in `backend/config/wealthi.json` (gitignored), validated at startup by the
 Zod schema in `utils/config/schema.ts`; `wealthi.example.json` is the committed shape — update it
-whenever the shape changes. Learned patterns live in `backend/config/patterns/<bank>.json`. Config and
+whenever the shape changes.
+
+Two config errors are fatal, because neither can be repaired without inventing data: a duplicate
+`accounts[].id`, and a declared account with no `openingBalances` entry. Everything else about
+account cross-references is **pruned, not fatal** — deleting an account from `accounts` leaves
+references behind in up to seven other keys, and `pruneUnknownAccounts()` drops them so the server
+still starts. Each drop is printed to stderr at startup with what it cost: `tag only` (a
+`transferRules` entry or a `csvImports[].counterAccount` — a transfer is a tag, so balances are
+unaffected), `no longer imported` (an `accountSources` mapping, a manual/recurring entry, or a whole
+`csvImports` entry — **these change balances**), or `none` (a dead `openingBalances` key). Learned patterns live in `backend/config/patterns/<bank>.json`. Config and
 pattern files are read once, at module import: edits need a server restart.
 
 Accounts are **not hardcoded**: `account`/`counter_account` hold ids from `accounts`. Patterns never

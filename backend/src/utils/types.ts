@@ -50,6 +50,12 @@ interface BaseTransaction {
   transactedAt: Date
   messageGuid?: string | null
   sourceRowid?: bigint | null
+  /**
+   * The SMS body this row was parsed from, cleaned by sanitizeMessageText() so
+   * it is the readable message and nothing else. Set only on the SMS path —
+   * absent on manual/CSV rows, which have no message behind them.
+   */
+  rawText?: string | null
 }
 
 /**
@@ -79,6 +85,8 @@ interface TransactionMeta {
    * without re-deriving it; there is no column behind it.
    */
   isTransfer: boolean
+  /** Always present once a row is read back from the DB; null on manual/CSV rows. */
+  rawText: string | null
 }
 
 /** ParsedTransaction enriched with a DB identity and import timestamp, in minor units for the balance cascade */

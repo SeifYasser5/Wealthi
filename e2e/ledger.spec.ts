@@ -46,6 +46,26 @@ test.describe("transactions", () => {
     await expect(ledgerRows(page)).toContainText(["CITY CAFE"]);
   });
 
+  test("a row opens its detail modal with the bank message", async ({
+    page,
+  }) => {
+    await page.goto("/transactions?yearMonth=2026-02");
+    await page.getByPlaceholder("Search merchant…").fill("cafe");
+    await expect(count(page)).toHaveText("1 transaction");
+
+    await ledgerRows(page).first().click();
+    const dialog = page.getByRole("dialog");
+    await expect(
+      dialog.getByRole("heading", { name: "CITY CAFE" }),
+    ).toBeVisible();
+    await expect(dialog).toContainText(
+      "Your card ending *2222 was charged EGP 40.00 at CITY CAFE. Available balance EGP 4,860.00",
+    );
+
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+  });
+
   test("month navigation", async ({ page }) => {
     await page.goto("/transactions?yearMonth=2026-01");
     await page.getByRole("button", { name: "Next month" }).click();

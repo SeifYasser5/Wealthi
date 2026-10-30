@@ -83,6 +83,11 @@ export interface Transaction {
   createdAt: string
   /** True exactly when `counterAccount` is set. */
   isTransfer: boolean
+  /**
+   * The bank SMS this row was parsed from, cleaned of invisible characters.
+   * Null for rows with no message behind them (manual and CSV entries).
+   */
+  rawText: string | null
 }
 
 export interface TransactionsResponse {

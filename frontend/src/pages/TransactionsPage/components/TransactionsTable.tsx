@@ -1,5 +1,16 @@
-import { amountColor, buildComputedBalances, CURRENCIES, money, netByCurrency, plural } from '../../../utils/utils'
+import {
+  amountColor,
+  buildComputedBalances,
+  CURRENCIES,
+  discrepancyByCurrency,
+  isBalanced,
+  money,
+  netByCurrency,
+  plural,
+} from '../../../utils/utils'
+import { useState } from 'react'
 import { TransactionRow } from './TransactionRow'
+import { TransactionModal } from './TransactionModal'
 import type { Transaction } from '@wealthi/shared'
 
 interface Props {
@@ -7,11 +18,17 @@ interface Props {
 }
 
 export function TransactionsTable({ transactions }: Props) {
-  const nets = CURRENCIES.map((currency) => netByCurrency(transactions, currency))
+  // The clicked row's id, not the row itself, so the modal follows a refetch
+  // instead of showing a stale copy.
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const selected = transactions.find((tx) => tx.id === selectedId) ?? null
   const computedBalances = buildComputedBalances(transactions)
+  const nets = CURRENCIES.map((currency) => netByCurrency(transactions, currency))
+  const discrepancies = CURRENCIES.map((currency) => discrepancyByCurrency(transactions, computedBalances, currency))
 
   return (
     <div className="overflow-hidden rounded-2xl bg-surface">
+      {selected && <TransactionModal tx={selected} onClose={() => setSelectedId(null)} />}
       <table className="w-full border-collapse text-sm">
         <thead className="text-left text-xs font-semibold uppercase tracking-wide text-foreground">
           <tr>
@@ -44,13 +61,22 @@ export function TransactionsTable({ transactions }: Props) {
               </td>
               <td className="px-4 py-3" />
               <td className="px-4 py-3" />
-              <td className="px-4 py-3" />
+              <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums">
+                {discrepancies.map(
+                  (discrepancy, i) =>
+                    discrepancy !== null && (
+                      <div key={i} className={isBalanced(discrepancy) ? 'text-positive' : 'text-warning'}>
+                        {money(discrepancy)}
+                      </div>
+                    ),
+                )}
+              </td>
             </tr>
           </tbody>
         )}
         <tbody className="divide-y divide-line">
           {transactions.map((tx, i) => (
-            <TransactionRow key={tx.id} tx={tx} computed={computedBalances[i]} />
+            <TransactionRow key={tx.id} tx={tx} computed={computedBalances[i]} onSelect={() => setSelectedId(tx.id)} />
           ))}
         </tbody>
       </table>
