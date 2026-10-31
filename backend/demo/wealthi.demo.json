@@ -1,0 +1,47 @@
+{
+  "bankSenders": ["DemoBank"],
+  "accounts": [
+    { "id": "checking", "label": "Checking", "currency": "EGP" },
+    { "id": "credit_card", "label": "Credit Card", "currency": "EGP" },
+    { "id": "savings_usd", "label": "Savings (USD)", "currency": "USD" }
+  ],
+  "accountSources": {
+    "demo-bank:4821": "checking",
+    "demo-bank:7390": "credit_card",
+    "demo-bank:2056": "savings_usd"
+  },
+  "openingBalances": {
+    "checking": 38500,
+    "credit_card": -7450,
+    "savings_usd": 1200
+  },
+  "merchantCategories": {
+    "RENT TRANSFER": "Rent",
+    "ELECTRICITY BILL": "Bills",
+    "NILECOM MOBILE": "Bills",
+    "FASTLINK INTERNET": "Bills",
+    "GREENLEAF MARKET": "Groceries",
+    "FRESH BASKET": "Groceries",
+    "CAFE LUNA": "Dining",
+    "KOSHARY CORNER": "Dining",
+    "SAKURA SUSHI BAR": "Dining",
+    "SWIFTCAB TRIP": "Transport",
+    "FUEL STATION 26": "Transport",
+    "URBAN THREADS": "Shopping",
+    "PAGES BOOKSTORE": "Shopping",
+    "WELLCARE PHARMACY": "Health",
+    "IRONWORKS GYM": "Health",
+    "STREAMFLIX MONTHLY": "Subscriptions",
+    "TUNEBOX MUSIC": "Subscriptions"
+  },
+  "extraCategories": ["Electronics", "Gifts", "Travel"],
+  "transferRules": [
+    { "id": "card-payment-out", "account": "checking", "type": "debit", "merchant": "CARD PAYMENT", "counterAccount": "credit_card" },
+    { "id": "card-payment-in", "account": "credit_card", "type": "credit", "merchant": "CARD PAYMENT", "counterAccount": "checking" },
+    { "id": "usd-savings-out", "account": "checking", "type": "debit", "merchant": "USD SAVINGS", "counterAccount": "savings_usd" },
+    { "id": "usd-savings-in", "account": "savings_usd", "type": "credit", "merchant": "FX CONVERSION", "counterAccount": "checking" }
+  ],
+  "recurringTransactions": [],
+  "manualTransactions": [],
+  "csvImports": []
+}

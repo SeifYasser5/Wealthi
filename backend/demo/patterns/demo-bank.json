@@ -1,0 +1,44 @@
+{
+  "bank": "demo-bank",
+  "senders": ["DemoBank"],
+  "patterns": [
+    {
+      "id": "demo-bank:7f45f49d26",
+      "enabled": true,
+      "type": "debit",
+      "pattern": "Your card ending {account:MASKED} was charged {currency:CUR} {amount:NUM} at {merchant:TEXT} . Available limit {:CUR} {:NUM}",
+      "generated": "Your card ending {account:MASKED} was charged {currency:CUR} {amount:NUM} at {merchant:TEXT} . Available limit {:CUR} {balance:NUM}",
+      "reason": "debit keyword in template text",
+      "review": ["edited: the available limit is not the card's balance, so it is matched but not extracted"],
+      "messages": 173
+    },
+    {
+      "id": "demo-bank:594f81d2f8",
+      "enabled": true,
+      "type": "debit",
+      "pattern": "Account {account:MASKED} debited {currency:CUR} {amount:NUM} for {description:TEXT} . Balance {:CUR} {balance:NUM}",
+      "generated": "Account {account:MASKED} debited {currency:CUR} {amount:NUM} for {description:TEXT} . Balance {:CUR} {balance:NUM}",
+      "reason": "debit keyword in template text",
+      "messages": 36
+    },
+    {
+      "id": "demo-bank:6bc84e8872",
+      "enabled": true,
+      "type": "credit",
+      "pattern": "Account {account:MASKED} credited with {currency:CUR} {amount:NUM} from {counterparty:TEXT} . Balance {:CUR} {balance:NUM}",
+      "generated": "Account {account:MASKED} credited with {currency:CUR} {amount:NUM} from {counterparty:TEXT} . Balance {:CUR} {balance:NUM}",
+      "reason": "credit keyword in template text",
+      "messages": 17
+    },
+    {
+      "id": "demo-bank:def69ae08e",
+      "enabled": true,
+      "type": "credit",
+      "pattern": "Card ending {account:MASKED} credited with {currency:CUR} {amount:NUM} from {counterparty:TEXT} . Available limit {:CUR} {:NUM}",
+      "generated": "Card ending {account:MASKED} credited with {currency:CUR} {amount:NUM} from {counterparty:TEXT} . Available limit {:CUR} {balance:NUM}",
+      "reason": "credit keyword in template text",
+      "review": ["edited: the available limit is not the card's balance, so it is matched but not extracted"],
+      "messages": 7
+    }
+  ]
+}

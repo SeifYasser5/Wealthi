@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import app from './app'
 import { importFromChatDb } from './services/importer'
+import { seedDemo } from './demo/seed'
 
 const PORT = process.env.PORT || 3000
 
@@ -13,9 +14,14 @@ const HOST = process.env.HOST ?? '127.0.0.1'
 // Place your iMessage DB at backend/data/chat.db, or override via IMESSAGE_DB_PATH.
 const CHAT_DB_PATH = process.env.IMESSAGE_DB_PATH ?? join(process.cwd(), 'data', 'chat.db')
 
-app.listen(Number(PORT), HOST, () => {
-  console.log(`Server running on http://${HOST}:${PORT}`)
+function listen(onListening?: () => void): void {
+  app.listen(Number(PORT), HOST, () => {
+    console.log(`Server running on http://${HOST}:${PORT}`)
+    onListening?.()
+  })
+}
 
+function importOnStart(): void {
   if (!existsSync(CHAT_DB_PATH)) {
     console.log(`[import] No chat.db found at ${CHAT_DB_PATH} — skipping auto-import.`)
     console.log(`[import] Copy your iMessage DB there or set IMESSAGE_DB_PATH.`)
@@ -31,4 +37,21 @@ app.listen(Number(PORT), HOST, () => {
     .catch((err: unknown) => {
       console.error('[import] Failed:', err instanceof Error ? err.message : err)
     })
-})
+}
+
+// The public demo (see Dockerfile) rebuilds its synthetic ledger before it
+// listens, so the first visitor never sees an empty page, and exits if it
+// can't: a demo with no data is a failed deploy, not something to serve.
+if (process.env.WEALTHI_DEMO === 'true') {
+  seedDemo()
+    .then(({ months, totalStored, errors }) => {
+      console.log(`[demo] Seeded ${totalStored} transactions over ${months} months, ${errors.length} parse errors.`)
+      listen()
+    })
+    .catch((err: unknown) => {
+      console.error('[demo] Seed failed:', err instanceof Error ? err.message : err)
+      process.exit(1)
+    })
+} else {
+  listen(importOnStart)
+}

@@ -4,6 +4,18 @@ Wealthi turns bank SMS notifications, as they arrive in the macOS Messages datab
 
 **No model does this work.** Template inference is a deterministic algorithm over the message corpus: value masking, longest-common-subsequence clustering, rule-based slot labelling. There is no LLM, no model call and no external inference service in the repo.
 
+## Live demo
+
+<!-- TODO: replace with the Railway domain once it is generated -->
+**[wealthi demo](https://REPLACE-ME.up.railway.app)**, running on Railway with synthetic data.
+
+The demo runs the real pipeline, not a mock-up. On every start it generates six months of made-up bank SMS for a made-up person: salary, rent, bills, card spending, a monthly card payment and a monthly USD saving (`backend/src/demo/ledger.ts`). It writes them to a throwaway `chat.db` and imports that with the same importer, parser and patterns code a real run uses. The bank, the person, the merchants and the card numbers are all invented.
+
+- **The patterns are learned.** `backend/demo/patterns/demo-bank.json` is what `patterns:learn` mines from those messages, enabled after review with one hand edit: the learner labelled the card's *available limit* as a balance, which it isn't. A unit test fails if the generated messages ever make the learner produce anything else.
+- **The ledger reconciles.** The SMS balances are running balances from the demo's opening balances, so checking and USD savings show a discrepancy of 0 every month, and an integration test checks that every message parses.
+- **The dates follow the calendar.** The current month always has data, and a past month's transactions read the same on every start.
+- **Edits are live but temporary.** Recategorizing a transaction works; every restart or deploy rebuilds the demo from scratch.
+
 ## Design
 
 - **Inferred templates, not hand-written per-bank parsers.** A new bank or a changed format is a learn run and a review, not new code.
@@ -30,7 +42,7 @@ only          attributedBody  exact match       table             touched months
 offline: npm run patterns:learn   chat.db -> mask -> mine -> label -> config/patterns/<bank>.json (disabled)
 ```
 
-The import runs once, when the server starts (`backend/src/server.ts`), through `services/importer.ts`. There is no HTTP endpoint and no npm script that runs it. If `chat.db` is missing, the server skips the import and serves what is already in Postgres.
+The import runs once, when the server starts (`backend/src/server.ts`), through `services/importer.ts`. There is no HTTP endpoint and no npm script that runs it. If `chat.db` is missing, the server skips the import and serves what is already in Postgres. In demo mode (`WEALTHI_DEMO=true`, set only by the `Dockerfile`) it never reads `chat.db`: it imports the generated demo ledger instead, before it starts listening.
 
 **Read.** `services/ingest/reader.ts` opens `chat.db` with better-sqlite3, `readonly: true`, and selects only messages whose sender handle is listed in `bankSenders`. Messages from other senders are never read.
 
@@ -128,7 +140,7 @@ Known and deferred by choice, not undiscovered.
 
 ## Running it
 
-Requires macOS and a copy of your own iMessage `chat.db`. The copy lives in `backend/data/`, which is gitignored, and is opened read-only; it never leaves the machine. Without it you can run the test suite, but not the app.
+Requires macOS and a copy of your own iMessage `chat.db`. The copy lives in `backend/data/`, which is gitignored, and is opened read-only; it never leaves the machine. Without it you can run the test suite and the demo image (*Deploying the demo*), but not the app on your own data.
 
 ```bash
 nvm use 22
@@ -146,6 +158,19 @@ cd ../frontend && npm run dev   # http://localhost:5173
 **Removing an account.** `accounts` in `wealthi.json` is referenced from six other keys, so deleting an entry leaves those references dangling. The server no longer refuses to start over them: it drops each one and prints what went, and what it cost, to stderr. Dropped `transferRules` and `csvImports[].counterAccount` entries cost only the transfer tag, so balances are unchanged; a dropped `accountSources` mapping, manual entry, recurring entry or whole `csvImports` entry was **in the balance math**, so balances will move on the next import. The startup warning is the list of entries to clean up. Two things are still fatal, because neither can be fixed without inventing a number: a duplicate account id, and a declared account with no `openingBalances` entry.
 
 `npm run test:e2e` from the repo root runs Playwright against a throwaway Postgres seeded from a synthetic `chat.db`, and tears it down afterwards. Needs Docker.
+
+## Deploying the demo
+
+The `Dockerfile` builds the demo: the API and the built frontend in one container, configured from `backend/demo/`. `railway.json` tells Railway to build it and to health-check `/api/health`. Nothing personal can reach the image: `backend/config/` and `backend/data/` are gitignored, so a GitHub deploy never sees them, and `.dockerignore` keeps them out of a local build too.
+
+1. In Railway, create a project from this GitHub repo. It picks up `railway.json` and builds the `Dockerfile`.
+2. Add a PostgreSQL database to the project.
+3. On the app service, set one variable: `DATABASE_URL` = `${{Postgres.DATABASE_URL}}`. That is the private-network URL; use your database service's name if it isn't `Postgres`. Railway sets `PORT`, and the `Dockerfile` sets everything else.
+4. Under the app service's *Settings → Networking*, generate a domain. Leave the database's public TCP proxy off: nothing outside the project needs it.
+
+Each start runs `prisma db push`, seeds the demo, then listens; the health check passes once the data is in. The seed wipes the database it's pointed at, so it refuses to run unless the app is on the demo config and every SMS row already stored is demo data: pointed at a real ledger by mistake, it stops instead of replacing it.
+
+To try the image locally: `docker build -t wealthi-demo .`, then `docker run -p 127.0.0.1:8080:8080 -e PORT=8080 -e DATABASE_URL=… wealthi-demo` against a disposable Postgres.
 
 ## Reading guide
 

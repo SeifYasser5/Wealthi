@@ -165,3 +165,11 @@ export async function createAllTransactions(txs: StagedTransaction[], db: Db): P
   })
   return count
 }
+
+/**
+ * Rows parsed from an SMS whose chat.db guid doesn't start with `prefix` —
+ * how seedDemo() tells a real ledger from the demo one before wiping it.
+ */
+export async function countSmsRowsOutside(prefix: string, db: Db = prisma): Promise<number> {
+  return db.transaction.count({ where: { messageGuid: { not: null }, NOT: { messageGuid: { startsWith: prefix } } } })
+}

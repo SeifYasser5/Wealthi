@@ -20,6 +20,7 @@ The frontend is a thin React reader over the read API.
 |---|---|
 | `backend/src/services/patterns/`, `services/ingest/decode.ts`, `services/ingest/parser.ts`, `services/learn-patterns.ts`, the pattern file format | `docs/PATTERNS.md`, `docs/PATTERNS-ALGORITHM.md` |
 | `services/importer.ts`, `services/importer2.ts`, `services/ingest/balance.ts` | `docs/ARCHITECTURE.md`, `README.md` (*Architecture*, *Ledger correctness*), the importer table below |
+| `backend/src/demo/`, `backend/demo/`, `Dockerfile`, `railway.json` | `README.md` (*Live demo*, *Deploying the demo*), *Demo deployment* below |
 
 ## Monorepo layout
 
@@ -31,6 +32,7 @@ frontend/   React 19 (Vite) + React Router + TanStack Query + Tailwind v4
 docker-compose.yml   Postgres 16 (container: wealthi_db)
 e2e/        Playwright specs + stack.mjs (test DB, seed, API on :3100) — config in playwright.config.ts
 .github/workflows/ci.yml   lint, typecheck, tests + coverage, Playwright; weekly mutation run
+Dockerfile, railway.json   the public demo on Railway: synthetic data only (see Demo deployment)
 ```
 
 Install from the root on Node 22 with **npm 11+** (npm 10's arborist crashes on this tree):
@@ -83,7 +85,8 @@ CI gate, in order: backend `lint`, `format:check`, `typecheck`, `test:coverage`;
 
 **The import runs only when the backend starts**: `src/server.ts` calls `importFromChatDb()` from
 `services/importer.ts` in the `app.listen` callback (no endpoint, no npm script). If `chat.db` is
-missing it is skipped and the server serves what is already in Postgres.
+missing it is skipped and the server serves what is already in Postgres. In demo mode
+(`WEALTHI_DEMO=true`) the server never reads `chat.db`: it runs `seedDemo()` instead, before it listens.
 
 ### importer.ts vs importer2.ts — know which one you are editing
 
@@ -109,6 +112,8 @@ backend/src/
   services/learn-patterns.ts                  CLI behind npm run patterns:learn
   services/ingest/     pipeline steps: reader → decode → parser → transfer → balance
   services/patterns/   learn.ts (mask → mine → label); mine.ts is wired, mine2.ts (older LCS miner) is not
+  demo/                ledger.ts (synthetic SMS, dated relative to now); seed.ts (demo mode's import)
+backend/demo/          the demo's committed config + pattern file — synthetic, safe to read and edit
 frontend/src/pages/<Name>Page/   <Name>Page.tsx + index.ts + its own components/
 ```
 
@@ -208,9 +213,28 @@ The backend reads `backend/.env` (no committed example). Only `DATABASE_URL` is 
 | `CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | comma-separated allowlist |
 | `WEALTHI_CONFIG_PATH` / `WEALTHI_PATTERNS_DIR` | `backend/config/…` | config + pattern dir (tests point them at fixtures) |
 | `TEST_DATABASE_URL` / `API_PROXY_TARGET` | — | test-only, see `docs/TESTING.md` |
+| `WEALTHI_DEMO` / `WEALTHI_STATIC_DIR` | unset | demo mode; serve the built frontend from this dir — set by the `Dockerfile` only |
 
 ## Security posture
 
 The API serves your whole financial history with **no authentication**. Don't widen these defaults:
 Postgres published on `127.0.0.1` only (its default password is public), the API bound to `127.0.0.1`,
 CORS an explicit allowlist (never `*`), `chat.db` opened read-only.
+
+## Demo deployment
+
+The public demo (README → *Live demo*) is the `Dockerfile`, deployed to Railway by `railway.json`. It
+sets `WEALTHI_DEMO=true`, points config and patterns at `backend/demo/`, binds `0.0.0.0` and serves
+`frontend/dist` from Express, so the security defaults above are widened **only in that image**, which
+holds synthetic data only. `.dockerignore` keeps `backend/config/` and `backend/data/` out of it.
+
+On start the container runs `prisma db push`, then `seedDemo()` (`src/demo/seed.ts`): `demoLedger(now)`
+writes six months of made-up SMS to a throwaway `chat.db`, and the live `importer.ts` rebuilds the
+database from it — so every restart resets the demo, including category edits. `seedDemo()` refuses to
+run unless the config and patterns are `backend/demo/`'s and every stored SMS row has a `demo-` guid.
+
+`backend/demo/wealthi.demo.json` and `src/demo/ledger.ts` must agree: opening balances (`OPENING`),
+merchant strings (categories, transfer rules) and card digits. `backend/demo/patterns/demo-bank.json`
+is `learnBank()`'s output over the demo SMS, enabled, with the card's available limit unlabelled;
+`test/unit/demo.test.ts` fails if a ledger change makes learn mine something else, and
+`test/integration/demo.test.ts` fails on any parse error or non-zero discrepancy.

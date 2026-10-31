@@ -1,4 +1,5 @@
 import express from 'express'
+import { resolve } from 'node:path'
 import cors from 'cors'
 import healthRouter from './routes/health'
 import transactionsRouter from './routes/transactions'
@@ -29,5 +30,16 @@ app.use('/api/balances', balancesRouter)
 app.use('/api/spending', spendingRouter)
 app.use('/api/categories', categoriesRouter)
 app.use('/api/accounts', accountsRouter)
+
+// The public demo serves the built frontend from this same origin (see
+// Dockerfile). In development Vite serves it instead and proxies /api here.
+const STATIC_DIR = process.env.WEALTHI_STATIC_DIR
+if (STATIC_DIR) {
+  const indexHtml = resolve(STATIC_DIR, 'index.html')
+  app.use(express.static(STATIC_DIR))
+  // Client-side routes (/transactions, /balances, …) all load the app shell;
+  // an unknown /api path stays a 404.
+  app.get(/^\/(?!api(?:\/|$))/, (_req, res) => res.sendFile(indexHtml))
+}
 
 export default app

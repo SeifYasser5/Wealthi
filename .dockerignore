@@ -1,0 +1,15 @@
+# Your real data never enters the image: config and patterns, chat.db, CSVs, .env.
+backend/config
+backend/data
+**/.env
+**/.env.*
+
+**/node_modules
+**/dist
+**/coverage
+backend/reports
+backend/.stryker-tmp
+test-results
+playwright-report
+blob-report
+.git
