@@ -11,10 +11,10 @@ Wealthi turns bank SMS notifications, as they arrive in the macOS Messages datab
 
 The demo runs the real pipeline, not a mock-up. On every start it generates six months of made-up bank SMS for a made-up person: salary, rent, bills, card spending, a monthly card payment and a monthly USD saving (`backend/src/demo/ledger.ts`). It writes them to a throwaway `chat.db` and imports that with the same importer, parser and patterns code a real run uses. The bank, the person, the merchants and the card numbers are all invented.
 
-- **The patterns are learned.** `backend/demo/patterns/demo-bank.json` is what `patterns:learn` mines from those messages, enabled after review with one hand edit: the learner labelled the card's *available limit* as a balance, which it isn't. A unit test fails if the generated messages ever make the learner produce anything else.
+- **The patterns are learned.** `backend/demo/patterns/demo-bank.json` is what the learner mines from those messages, enabled after review with one hand edit: the learner labelled the card's *available limit* as a balance, which it isn't. Every start loads it into the patterns table. A unit test fails if the generated messages ever make the learner produce anything else, and **Learn patterns** on the demo's Learn page finds nothing new.
 - **The ledger reconciles.** The SMS balances are running balances from the demo's opening balances, so checking and USD savings show a discrepancy of 0 every month, and an integration test checks that every message parses.
 - **The dates follow the calendar.** The current month always has data, and a past month's transactions read the same on every start.
-- **Edits are live but temporary.** Recategorizing a transaction works; every restart or deploy rebuilds the demo from scratch.
+- **Edits are live but temporary.** Recategorizing a transaction, editing categories or toggling a pattern works; every restart, deploy or dashboard import rebuilds the demo from scratch.
 
 ## Design
 
@@ -37,24 +37,25 @@ reader.ts     decode.ts       parser.ts         transfer.ts       importer.ts   
 bank senders  text column or  enabled patterns  config rule       + balance.ts       one Prisma transaction
 only          attributedBody  exact match       table             touched months
                                  |
-                                 +--> parse errors (count in import summary)
+                                 +--> parse errors (listed in the import report)
 
-offline: npm run patterns:learn   chat.db -> mask -> mine -> label -> config/patterns/<bank>.json (disabled)
+Learn page: POST /api/patterns/learn   chat.db -> mask -> mine -> label -> sms_patterns (new ones pending)
+            review: tick -> enabled, the rest -> disabled   (PATCH /api/patterns)
 ```
 
-The import runs once, when the server starts (`backend/src/server.ts`), through `services/importer.ts`. There is no HTTP endpoint and no npm script that runs it. If `chat.db` is missing, the server skips the import and serves what is already in Postgres. In demo mode (`WEALTHI_DEMO=true`, set only by the `Dockerfile`) it never reads `chat.db`: it imports the generated demo ledger instead, before it starts listening.
+The import runs when you ask for it: the **Run import** button on the Dashboard page calls `POST /api/import`, which runs `services/importer.ts` and keeps the request open until it finishes. The page shows a loading state meanwhile, then the report: months rebuilt, transactions stored, how long it took, and every message that could not be parsed, with the reason. Starting the server never imports. Only one import runs at a time; a second click (or another tab) while one is running joins it. If `chat.db` is missing, the report says so and Postgres keeps what it already holds. In demo mode (`WEALTHI_DEMO=true`, set only by the `Dockerfile`) it never reads `chat.db`: the server imports the generated demo ledger before it starts listening, and the dashboard button rebuilds that demo ledger again.
 
 **Read.** `services/ingest/reader.ts` opens `chat.db` with better-sqlite3, `readonly: true`, and selects only messages whose sender handle is listed in `bankSenders`. Messages from other senders are never read.
 
 **Decode.** `services/ingest/decode.ts` uses the `text` column, or extracts the text from the `attributedBody` blob (streamtyped or NSKeyedArchiver), and converts the Mac epoch date. A message with no text throws `DecodeError`, which aborts the run.
 
-**Parse.** `services/ingest/parser.ts` looks up the sender's enabled patterns and calls `extract()` in `services/patterns/pattern.ts`. It checks direction, amount, currency and account, maps the source key `<bank>:<last 4 digits>` to a configured account, and compares the message currency with the account's currency. Every outcome is explicit: a transaction, a skip, or a `ParseError`.
+**Parse.** `services/ingest/parser.ts`, built at the start of each import from the enabled rows of the `sms_patterns` table, looks up the enabled patterns of the sender's bank and calls `extract()` in `services/patterns/pattern.ts`. It checks direction, amount, currency and account, maps the source key `<bank>:<last 4 digits>` to a configured account, and compares the message currency with the account's currency. Every outcome is explicit: a transaction, a skip, or a `ParseError`.
 
-**Classify, recompute, persist.** `transfer.ts` sets `counterAccount` from `transferRules`. Manual and recurring entries from config join the parsed rows as transactions; `recomputeBalances` adds the CSV entries on top and calls `computeBalance` per account per touched month. `importer.ts` writes everything in one `prisma.$transaction`.
+**Classify, recompute, persist.** `transfer.ts` sets `counterAccount` from `transferRules`. Manual entries from config and every schedule's occurrences through today (each marked with its `schedule_id`) join the parsed rows as transactions; `recomputeBalances` adds the CSV entries on top and calls `computeBalance` per account per touched month. `importer.ts` writes everything in one `prisma.$transaction`.
 
 ## Template inference
 
-`npm run patterns:learn` reads every message from the configured bank senders, decodes it, and groups by bank: sender handles that normalize to the same lowercase slug share one corpus and one pattern file. `learnBank` then runs three steps.
+**Learn patterns** on the Learn page (`POST /api/patterns/learn` → `services/learn-patterns.ts`) reads every message from the configured bank senders, decodes it, and groups by bank: sender handles that normalize to the same lowercase slug share one corpus and one set of patterns. `learnBank` then runs three steps, and the patterns it finds that aren't stored yet are added as *pending* for review on the same page. The review enables the ones you tick and saves the rest disabled, so the next run offers only templates it has never seen; Enabled and Disabled tabs list the reviewed ones, each with a toggle.
 
 ### 1. Mask (`services/patterns/mask.ts`)
 
@@ -85,13 +86,13 @@ A pattern's id is `<bank>:` plus the first 10 hex characters of the SHA-1 of the
 
 ### Worked example
 
-`backend/test/unit/learn-patterns.test.ts` runs the real CLI over a synthetic `chat.db` holding five card charges with different merchants and amounts, plus an OTP message, a message with no decodable text, and a message from an unlisted sender.
+`backend/test/unit/learn-patterns.test.ts` runs the real learner over a synthetic `chat.db` holding five card charges with different merchants and amounts, plus an OTP message, a message with no decodable text, and a message from an unlisted sender.
 
 ```
 Your card ending *2222 was charged EGP 1.00 at ACME. Available balance EGP 900.00
 ```
 
-The CLI writes exactly one pattern, `enabled: false`, `type: 'debit'`, `messages: 5`:
+It learns exactly one pattern, stored pending, `type: 'debit'`, `messages: 5`:
 
 ```
 Your card ending {account:MASKED} was charged {currency:CUR} {amount:NUM} at {merchant:TEXT} . Available balance {:CUR} {balance:NUM}
@@ -133,9 +134,9 @@ miner and clustering for the LCS one; labelling and stable ids; the learn CLI en
 
 Known and deferred by choice, not undiscovered.
 
-- **Two importers.** `importer.ts` rebuilds the whole ledger on every run, which is what a still-changing pattern set needs. `importer2.ts` is the intended importer, an incremental cursor over new messages only; its design is settled and it takes over once patterns stop changing. Manual, recurring and CSV entries are left out of it on purpose while that part is reworked.
+- **Two importers.** `importer.ts` rebuilds the whole ledger on every run, which is what a still-changing pattern set needs. `importer2.ts` is the intended importer, an incremental cursor over new messages only; its design is settled and it takes over once patterns stop changing. Manual entries, schedules and CSV entries are left out of it on purpose while that part is reworked.
 - **Two miners.** `mine.ts` assumes one varying run per template, which is what these banks send and what the measurements support. `mine2.ts` drops that assumption and handles templates with several independent slots, for message sets more varied than mine; it is more complex, still under review, and not wired.
-- **Unmatched queue.** Unmatched messages are a count in the import summary, not a durable store or a review UI. Their text stays only in `chat.db`.
+- **Unmatched queue.** Unmatched messages are listed in the report of the import that met them, on the Dashboard page, until the page forgets it; they are not a durable store or a review UI. Their text stays only in `chat.db`.
 - **Review depth.** Pattern inference was AI generated in a day and is the most complex part of the repo; its logic was reviewed line by line, its implementation was not. Parts of the frontend and API surface were also AI generated and not reviewed line by line. The ingestion pipeline and ledger logic were designed and reviewed deliberately.
 
 ## Running it
@@ -150,12 +151,18 @@ docker compose up -d
 cp backend/config/wealthi.example.json backend/config/wealthi.json   # then fill it in
 cd backend && npm run db:push
 cp ~/Library/Messages/chat.db data/chat.db
-npm run patterns:learn          # then set "enabled": true in config/patterns/<bank>.json
-npm run dev                     # API on http://127.0.0.1:3000, imports on start
+npm run dev                     # API on http://127.0.0.1:3000
 cd ../frontend && npm run dev   # http://localhost:5173
+# Learn page: Learn patterns, then review and confirm; Dashboard: Run import
 ```
 
-**Removing an account.** `accounts` in `wealthi.json` is referenced from six other keys, so deleting an entry leaves those references dangling. The server no longer refuses to start over them: it drops each one and prints what went, and what it cost, to stderr. Dropped `transferRules` and `csvImports[].counterAccount` entries cost only the transfer tag, so balances are unchanged; a dropped `accountSources` mapping, manual entry, recurring entry or whole `csvImports` entry was **in the balance math**, so balances will move on the next import. The startup warning is the list of entries to clean up. Two things are still fatal, because neither can be fixed without inventing a number: a duplicate account id, and a declared account with no `openingBalances` entry.
+**Removing an account.** `accounts` in `wealthi.json` is referenced from six other keys, so deleting an entry leaves those references dangling. The server no longer refuses to start over them: it drops each one and prints what went, and what it cost, to stderr. Dropped `transferRules` and `csvImports[].counterAccount` entries cost only the transfer tag, so balances are unchanged; a dropped `accountSources` mapping, manual entry, recurring entry (until it is seeded into `schedules`) or whole `csvImports` entry was **in the balance math**, so balances will move on the next import. The startup warning is the list of entries to clean up. Two things are still fatal, because neither can be fixed without inventing a number: a duplicate account id, and a declared account with no `openingBalances` entry.
+
+**Categories.** They live in the database and are edited on the Categories page: add, rename, reorder, delete, and map merchants to them. The first start that finds no categories stored fills them from `merchantCategories` and `extraCategories` in `wealthi.json`. After that those keys are never read again, so edits to them change nothing. A category still used by a transaction, schedule or merchant can't be deleted; the page shows what uses each one. Upgrading from the config-only version, `npm run db:push` replaces `transactions.category` with `category_id` and drops the old manual assignments. The next import would drop them anyway, since it rebuilds every row.
+
+**Budgets.** The Spending page's *Budget* button (it toggles back to *Spending*) lists every category in the Categories page's order, with the month's spend as a bar against a monthly allowance you type in; categories left empty simply have none, and the total budget is shown on top. Upgrading, `npm run db:push` adds `categories.budget`.
+
+**Schedules.** Anything that repeats without a bank message (rent, a subscription, interest) is a schedule, added on the Schedules page: an amount, an account, a merchant, an optional category, and how often (every N days, weeks, months or years) from a start date to an optional end date. Each import adds every occurrence from the start date through today, marked as scheduled on the ledger; a new or edited schedule shows up after the next import, and an edit rewrites past occurrences too, so to change an amount from some date on, end the schedule and add a new one. The first start that finds no schedules stored turns `recurringTransactions` in `wealthi.json` into monthly ones; remove the key after that, or emptying the page brings them back on the next start. Upgrading, `npm run db:push` adds the `schedules` table and `transactions.schedule_id`.
 
 `npm run test:e2e` from the repo root runs Playwright against a throwaway Postgres seeded from a synthetic `chat.db`, and tears it down afterwards. Needs Docker.
 

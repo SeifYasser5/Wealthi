@@ -32,7 +32,6 @@ const env = {
   ...process.env,
   DATABASE_URL: url,
   WEALTHI_CONFIG_PATH: resolve(backend, "test/fixtures/wealthi.test.json"),
-  WEALTHI_PATTERNS_DIR: resolve(backend, "test/fixtures/patterns"),
   TZ: "UTC",
 };
 
@@ -47,7 +46,8 @@ execFileSync(
   { cwd: backend, env, stdio: "inherit" },
 );
 
-// IMESSAGE_DB_PATH points nowhere so the server skips its own start-up import.
+// IMESSAGE_DB_PATH points nowhere, so an import (POST /api/import) is skipped
+// rather than wiping the seed.
 // Started the way `npm run dev` starts it.
 const server = spawn("npx", ["ts-node", "src/server.ts"], {
   cwd: backend,

@@ -1,5 +1,5 @@
 import { resolve } from 'node:path'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ImportSummary } from '../../src/utils/types'
 import { resetDatabase } from '../setup/reset'
 
@@ -17,20 +17,20 @@ let seedDemo: typeof import('../../src/demo/seed').seedDemo
 let prisma: typeof import('../../src/db/client').prisma
 
 beforeAll(async () => {
-  // Config and patterns are read at import time, so load everything under the demo's.
+  // Config is read at import time, so load everything under the demo's.
   vi.resetModules()
   vi.stubEnv('WEALTHI_CONFIG_PATH', resolve(__dirname, '../../demo/wealthi.demo.json'))
-  vi.stubEnv('WEALTHI_PATTERNS_DIR', resolve(__dirname, '../../demo/patterns'))
   ;({ prisma } = await import('../../src/db/client'))
   ;({ seedDemo } = await import('../../src/demo/seed'))
 
-  await resetDatabase()
+  // Empty, as on a fresh demo deploy: seedDemo stores the demo's own patterns.
+  await resetDatabase({ patterns: false })
   summary = await seedDemo(NOW)
 })
 
 afterAll(async () => {
   vi.unstubAllEnvs()
-  await resetDatabase()
+  await resetDatabase({ patterns: false })
   await prisma?.$disconnect()
 })
 
@@ -59,6 +59,13 @@ describe('seedDemo', () => {
       ['credit_card', -7450],
       ['savings_usd', 1200],
     ])
+  })
+
+  it('replaces the categories with the demo config’s, alphabetically, with its merchant map', async () => {
+    const categories = await prisma.category.findMany({ include: { merchants: true }, orderBy: { position: 'asc' } })
+    expect(categories.length).toBeGreaterThan(0)
+    expect(categories.map((c) => c.name)).toEqual([...categories.map((c) => c.name)].sort((a, b) => a.localeCompare(b)))
+    expect(await prisma.merchantCategory.count()).toBeGreaterThan(0)
   })
 
   it('tags the card payments and USD savings as transfers, and categorizes by merchant', async () => {
@@ -95,5 +102,41 @@ describe('seedDemo', () => {
     })
     await expect(seedDemo(NOW)).rejects.toThrow('the database holds 1 transactions that are not demo data')
     expect(await prisma.transaction.count()).toBe(summary.totalStored + 1)
+  })
+})
+
+describe('demo patterns', () => {
+  beforeEach(async () => {
+    await resetDatabase({ patterns: false })
+    await seedDemo(NOW)
+  })
+
+  it('stores the committed pattern file, enabled', async () => {
+    const patterns = await prisma.smsPattern.findMany()
+    expect(patterns.length).toBeGreaterThan(0)
+    expect(patterns.every((p) => p.bank === 'demo-bank' && p.status === 'enabled')).toBe(true)
+  })
+
+  it("undoes a visitor's toggles on the next seed", async () => {
+    await prisma.smsPattern.updateMany({ data: { status: 'disabled' } })
+    await expect(seedDemo(NOW)).resolves.toMatchObject({ errors: [] })
+    expect(await prisma.smsPattern.count({ where: { status: { not: 'enabled' } } })).toBe(0)
+  })
+
+  it('learns nothing new from its own ledger', async () => {
+    const { runLearn } = await import('../../src/services/run-learn')
+    vi.stubEnv('WEALTHI_DEMO', 'true')
+    const before = await prisma.smsPattern.count()
+    await expect(runLearn()).resolves.toMatchObject({ status: 'completed', source: 'demo ledger', added: 0 })
+    expect(await prisma.smsPattern.count()).toBe(before)
+    expect(await prisma.smsPattern.count({ where: { missing: true } })).toBe(0)
+  })
+
+  it('refuses a database holding patterns of another bank', async () => {
+    await prisma.smsPattern.update({
+      where: { id: (await prisma.smsPattern.findFirstOrThrow()).id },
+      data: { bank: 'real-bank' },
+    })
+    await expect(seedDemo(NOW)).rejects.toThrow('the database holds 1 patterns that are not demo data')
   })
 })

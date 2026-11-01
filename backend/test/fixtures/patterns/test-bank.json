@@ -1,6 +1,5 @@
 {
   "bank": "test-bank",
-  "senders": ["Test Bank"],
   "patterns": [
     {
       "id": "test-bank:card-charge",

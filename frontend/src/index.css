@@ -8,3 +8,44 @@ body,
   min-height: 100vh;
   background-color: var(--color-background);
 }
+
+/* Native controls (select menus, scrollbars, date pickers) follow the dark palette. */
+:root {
+  color-scheme: dark;
+}
+
+body {
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'cv11', 'ss01';
+}
+
+::selection {
+  background-color: var(--color-primary-line);
+}
+
+/* Tailwind v4 resets buttons to the default cursor. Every enabled control that
+   acts on a click gets the pointer (a label wrapping a checkbox clicks it too);
+   a disabled one gets not-allowed. A busy control overrides that with
+   `disabled:cursor-wait`, which wins because utilities outrank this layer.
+   Text fields keep the text cursor and links already have the pointer. */
+@layer base {
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  select:not(:disabled),
+  summary,
+  input:is([type='checkbox'], [type='radio'], [type='file'], [type='range'], [type='color']):not(:disabled),
+  label:has(input:is([type='checkbox'], [type='radio']):not(:disabled)) {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  select:disabled,
+  input:disabled,
+  label:has(input:is([type='checkbox'], [type='radio']):disabled),
+  [aria-disabled='true'] {
+    cursor: not-allowed;
+  }
+}

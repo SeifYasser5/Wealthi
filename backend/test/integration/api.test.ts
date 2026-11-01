@@ -1,20 +1,29 @@
 import request from 'supertest'
-import type { BalancesResponse, SpendingResponse, TransactionsResponse } from '@wealthi/shared'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import type {
+  BalancesResponse,
+  ImportResponse,
+  InsightsResponse,
+  SpendingResponse,
+  TransactionsResponse,
+} from '@wealthi/shared'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import app from '../../src/app'
 import { prisma } from '../../src/db/client'
 import { importFromChatDb } from '../../src/services/importer'
 import { buildChatDb } from '../fixtures/chat-db'
 import { LEDGER } from '../fixtures/messages'
 import { resetDatabase } from '../setup/reset'
+import type { ImportSummary } from '../../src/utils/types'
 
 /** The read API over the imported fixture ledger, through Express but without a listening port. */
+
+let summary: ImportSummary
 
 beforeAll(async () => {
   await resetDatabase()
   const chatDb = buildChatDb(LEDGER)
   try {
-    await importFromChatDb(chatDb.path)
+    summary = await importFromChatDb(chatDb.path)
   } finally {
     chatDb.cleanup()
   }
@@ -34,6 +43,32 @@ describe('GET /api/accounts', () => {
   it('lists the configured accounts', async () => {
     const res = await request(app).get('/api/accounts').expect(200)
     expect(JSON.stringify(res.body)).toContain('savings_usd')
+  })
+})
+
+describe('POST /api/import', () => {
+  afterEach(() => vi.unstubAllEnvs())
+
+  it('rebuilds the same ledger from chat.db and reports it', async () => {
+    const chatDb = buildChatDb(LEDGER)
+    vi.stubEnv('IMESSAGE_DB_PATH', chatDb.path)
+    try {
+      const res = await request(app).post('/api/import').expect(200)
+      const report = res.body as ImportResponse
+      expect(report).toMatchObject({ status: 'completed', source: chatDb.path, months: summary.months })
+      expect(report.totalStored).toBe(summary.totalStored)
+      expect(report.parseErrors).toHaveLength(summary.errors.length)
+      expect(await prisma.transaction.count()).toBe(summary.totalStored)
+    } finally {
+      chatDb.cleanup()
+    }
+  })
+
+  it('skips, keeping the stored ledger, when there is no chat.db', async () => {
+    vi.stubEnv('IMESSAGE_DB_PATH', '/nonexistent/chat.db')
+    const res = await request(app).post('/api/import').expect(200)
+    expect(res.body).toMatchObject({ status: 'skipped', totalStored: 0 })
+    expect(await prisma.transaction.count()).toBe(summary.totalStored)
   })
 })
 
@@ -84,6 +119,24 @@ describe('GET /api/balances', () => {
   })
 })
 
+describe('GET /api/insights', () => {
+  it('lists every non-transfer row oldest first, with its category resolved', async () => {
+    const res = await request(app).get('/api/insights').expect(200)
+    const body = res.body as InsightsResponse
+    expect(body.uncategorized).toBe('Uncategorized')
+    // The CARD PAYMENT legs are a transfer, so neither is listed.
+    expect(body.rows.map((r) => [r.yearMonth, r.type, r.merchant, r.amount, r.category])).toEqual([
+      ['2026-01', 'debit', 'ACME GROCERS', 250, 'Groceries'],
+      ['2026-01', 'credit', 'EMPLOYER LTD', 5000, 'Uncategorized'],
+      ['2026-02', 'credit', 'EMPLOYER LTD', 1200, 'Uncategorized'],
+      ['2026-02', 'debit', 'ACME GROCERS', 100, 'Groceries'],
+      ['2026-02', 'debit', 'CITY CAFE', 40, 'Uncategorized'],
+    ])
+    const times = body.rows.map((r) => r.transactedAt)
+    expect(times).toEqual([...times].sort())
+  })
+})
+
 describe('spending and categories', () => {
   it('breaks down non-transfer debits by category', async () => {
     const res = await request(app).get('/api/spending?yearMonth=2026-01').expect(200)
@@ -95,26 +148,30 @@ describe('spending and categories', () => {
 
   it('lets a manual category override the merchant map, and clears it again', async () => {
     const tx = await prisma.transaction.findFirstOrThrow({ where: { yearMonth: '2026-01', merchant: 'ACME GROCERS' } })
+    const dining = await prisma.category.findUniqueOrThrow({ where: { name: 'Dining' } })
 
-    await request(app).patch(`/api/transactions/${tx.id}/category`).send({ category: 'Dining' }).expect(200)
+    const res = await request(app).patch(`/api/transactions/${tx.id}/category`).send({ categoryId: dining.id }).expect(200) // prettier-ignore
+    expect(res.body.transaction).toMatchObject({ categoryId: dining.id, category: 'Dining' })
     let spending = (await request(app).get('/api/spending?yearMonth=2026-01')).body as SpendingResponse
     expect(spending.categories.map((c) => c.category)).toEqual(['Dining'])
 
-    await request(app).patch(`/api/transactions/${tx.id}/category`).send({ category: null }).expect(200)
+    await request(app).patch(`/api/transactions/${tx.id}/category`).send({ categoryId: null }).expect(200)
     spending = (await request(app).get('/api/spending?yearMonth=2026-01')).body as SpendingResponse
     expect(spending.categories.map((c) => c.category)).toEqual(['Groceries'])
   })
 
-  it('rejects a category that is not on the list', async () => {
+  it('rejects a category that is not stored', async () => {
     const tx = await prisma.transaction.findFirstOrThrow()
-    const res = await request(app).patch(`/api/transactions/${tx.id}/category`).send({ category: 'Yachts' }).expect(400)
-    expect(res.body.error).toMatch(/category must be null or one of/)
+    await request(app)
+      .patch(`/api/transactions/${tx.id}/category`)
+      .send({ categoryId: 999_999 })
+      .expect(400, { error: 'category 999999 does not exist' })
   })
 
   it('404s an unknown transaction', async () => {
     await request(app)
       .patch('/api/transactions/00000000-0000-4000-8000-000000000000/category')
-      .send({ category: 'Rent' })
-      .expect(404)
+      .send({ categoryId: null })
+      .expect(404, { error: 'transaction not found' })
   })
 })

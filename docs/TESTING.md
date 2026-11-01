@@ -22,9 +22,11 @@
 
 **Data**
 - Ledger: `backend/test/fixtures/messages.ts` (`LEDGER`, expected balances at the top; sender `Test Bank`, bank id `test-bank`), turned into a chat.db by `buildChatDb()` / `appendMessages()` in `fixtures/chat-db.ts`, which also encodes streamtyped `attributedBody` blobs.
-- Config and patterns: `fixtures/wealthi.test.json` and `fixtures/patterns/`, wired through `WEALTHI_CONFIG_PATH` / `WEALTHI_PATTERNS_DIR` in `backend/vitest.config.mts`, so no test reads your config, patterns or `chat.db`. `wealthi.full.json` and `fixtures/csv/` cover the balance-window tests.
-- Demo: `src/demo/ledger.ts` generates the public demo's SMS under `backend/demo/`'s config and patterns (AGENTS.md → *Demo deployment*). `test/unit/demo.test.ts` pins its shape and that learn mines exactly the committed pattern file; `test/integration/demo.test.ts` seeds it, loading `backend/demo/` the way `importer-window.test.ts` loads `wealthi.full.json`.
+- Config: `fixtures/wealthi.test.json`, wired through `WEALTHI_CONFIG_PATH` in `backend/vitest.config.mts`, so no test reads your config or `chat.db`. `wealthi.full.json` and `fixtures/csv/` cover the balance-window tests.
+- Patterns: the importer parses with the `sms_patterns` table, so `resetDatabase()` stores `fixtures/patterns/` in it (`resetDatabase({ patterns: false })` leaves it empty), and so does the e2e seed. Unit tests use `fixtureParser` / `fixturePatterns()` from `fixtures/pattern-files.ts`, the same files without a database.
+- Demo: `src/demo/ledger.ts` generates the public demo's SMS under `backend/demo/`'s config and patterns (AGENTS.md → *Demo deployment*). `test/unit/demo.test.ts` pins its shape and that learn mines exactly the committed pattern file; `test/integration/demo.test.ts` seeds it into an empty patterns table, loading `backend/demo/`'s config the way `importer-window.test.ts` loads `wealthi.full.json`.
 - Modules that read config at import (`manual-transactions`, `config/index`): `vi.resetModules()` + `vi.stubEnv('WEALTHI_CONFIG_PATH', …)` (`backend/test/unit/config.test.ts`).
+- Schedules: the import expands them through today, so pin the clock (`test/integration/schedules.test.ts`); the pure date math is `test/unit/schedule.test.ts`.
 - Reset: integration files call `resetDatabase()` (`test/setup/reset.ts`) and then import `LEDGER`, and files run serially (`fileParallelism: false`). e2e shares one seeded DB, so a test that writes restores the data in `afterEach` (`e2e/spending.spec.ts`).
 - Frontend: `frontend/test/fixtures.ts` holds the data, and `api.reset()` in `test/setup.ts` re-clones it before each test.
 

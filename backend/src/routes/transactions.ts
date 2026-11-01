@@ -1,7 +1,8 @@
 import { Router, Request, Response } from 'express'
 import { queryTransactions, updateCategory } from '../db/transactions'
-import { parseCategoryUpdate, parseTransactionFilters } from '../validation/transactions'
-import { route } from '../utils/helpers'
+import { parseTransactionFilters } from '../validation/transactions'
+import { parseCategoryUpdate } from '../validation/categories'
+import { isRefusal, refuse, route } from '../utils/helpers'
 
 const router = Router()
 
@@ -27,12 +28,11 @@ router.get(
 
 /**
  * PATCH /api/transactions/:id/category
- * Body: { "category": "Food" }  — assign a category
- *       { "category": null }    — clear it, falling back to the merchant map
+ * Body: { "categoryId": 3 }     — assign a category
+ *       { "categoryId": null }  — clear it, falling back to the merchant map
  *
- * `category` must be one of GET /api/categories; free-text values are rejected
- * so the spending breakdown can never accumulate near-duplicate labels.
- * Responds with the updated transaction.
+ * `categoryId` must be a stored category (GET /api/categories); the foreign key
+ * refuses any other with a 400. Responds with the updated transaction.
  */
 router.patch(
   '/:id/category',
@@ -40,8 +40,8 @@ router.patch(
     const parsed = parseCategoryUpdate(req.params.id, req.body)
     if ('error' in parsed) return res.status(400).json({ error: parsed.error })
 
-    const transaction = await updateCategory(parsed.value.id, parsed.value.category)
-    if (!transaction) return res.status(404).json({ error: 'transaction not found' })
+    const transaction = await updateCategory(parsed.value.id, parsed.value.categoryId)
+    if (isRefusal(transaction)) return refuse(res, transaction)
     res.json({ transaction })
   }),
 )

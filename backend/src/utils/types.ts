@@ -1,9 +1,51 @@
-import type { AccountBalance, AccountId, Currency, TransactionType } from '@wealthi/shared'
+import type {
+  AccountBalance,
+  AccountId,
+  Category,
+  CategorySuggestion,
+  CategorySuggestionsResponse,
+  Currency,
+  Frequency,
+  ImportParseError,
+  ImportResponse,
+  LearnResponse,
+  PatternRow,
+  PatternStatus,
+  PatternsResponse,
+  PatternType,
+  Schedule,
+  RecurringAccount,
+  ScheduleRequest,
+  ScheduleSuggestion,
+  ScheduleSuggestionsResponse,
+  TransactionType,
+} from '@wealthi/shared'
 import type { Minor } from './money'
 
 // Contract types shared with the frontend, re-exported so backend modules keep
 // importing everything from here.
-export type { AccountBalance, AccountId, Currency, TransactionType }
+export type {
+  AccountBalance,
+  AccountId,
+  Category,
+  CategorySuggestion,
+  CategorySuggestionsResponse,
+  Currency,
+  Frequency,
+  ImportParseError,
+  ImportResponse,
+  LearnResponse,
+  PatternRow,
+  PatternStatus,
+  PatternsResponse,
+  PatternType,
+  Schedule,
+  RecurringAccount,
+  ScheduleRequest,
+  ScheduleSuggestion,
+  ScheduleSuggestionsResponse,
+  TransactionType,
+}
 
 export interface DbRow {
   /** chat.db message.ROWID — monotonic insert order; the incremental import cursor. */
@@ -33,11 +75,11 @@ interface BaseTransaction {
   /** Merchant or payee name as printed by the bank */
   merchant: string | null
   /**
-   * Manually assigned spending category. Absent/null on freshly parsed rows —
-   * the spending breakdown then falls back to the merchant map. Set through
-   * PATCH /api/transactions/:id/category.
+   * Id of the manually assigned spending category. Absent/null on freshly
+   * parsed rows — the spending breakdown then falls back to the merchant map.
+   * Set through PATCH /api/transactions/:id/category.
    */
-  category?: string | null
+  categoryId?: number | null
   /**
    * Own account on the other side when this leg is an internal transfer; null
    * for ordinary spend/income. A non-null value is what marks a transaction as
@@ -56,6 +98,8 @@ interface BaseTransaction {
    * absent on manual/CSV rows, which have no message behind them.
    */
   rawText?: string | null
+  /** The schedule this row is an occurrence of; absent/null on every other row. */
+  scheduleId?: number | null
 }
 
 /**
@@ -87,15 +131,19 @@ interface TransactionMeta {
   isTransfer: boolean
   /** Always present once a row is read back from the DB; null on manual/CSV rows. */
   rawText: string | null
+  /** Always present once a row is read back from the DB; null unless a schedule added it. */
+  scheduleId: number | null
 }
 
 /** ParsedTransaction enriched with a DB identity and import timestamp, in minor units for the balance cascade */
 export type StoredTransaction = ParsedTransaction & TransactionMeta
 
-/** StoredTransaction as the API sends it: money as a plain number of major units */
-export type Transaction = Omit<StoredTransaction, 'amount' | 'reportedBalance'> & {
+/** StoredTransaction as the API sends it: money as a plain number of major units, and the category's name */
+export type Transaction = Omit<StoredTransaction, 'amount' | 'reportedBalance' | 'categoryId'> & {
   amount: number
   reportedBalance: number | null
+  categoryId: number | null
+  category: string | null
 }
 
 export type ImportError = { stage: 'parse'; decoded: DecodedMessage; cause: unknown }
@@ -138,7 +186,63 @@ export interface SpendingTransaction {
   merchant: string | null
   amount: Minor
   account: string
-  /** Manual override; null means the merchant map decides. */
+  /** Name of the manual category; null means the merchant map decides. */
   category: string | null
   transactedAt: Date
 }
+
+/** A non-transfer transaction as read for the Insights page. */
+export interface InsightTransaction {
+  id: string
+  yearMonth: string
+  transactedAt: Date
+  type: TransactionType
+  amount: Minor
+  currency: Currency
+  account: string
+  merchant: string | null
+  /** Name of the manual category; null means the merchant map decides. */
+  category: string | null
+}
+
+/**
+ * Why a db write was refused; the route answers with REFUSAL_STATUS[refused]
+ * and `error`. `invalid` is a reference to something not stored (a category id).
+ */
+export interface Refusal {
+  refused: 'not found' | 'conflict' | 'invalid'
+  error: string
+}
+
+/** A schedule as the import reads it: the amount in minor units, dates as "YYYY-MM-DD". */
+export interface StoredSchedule {
+  id: number
+  type: TransactionType
+  amount: Minor
+  currency: Currency
+  account: AccountId
+  merchant: string
+  categoryId: number | null
+  frequency: Frequency
+  interval: number
+  startDate: string
+  endDate: string | null
+}
+
+/** A manual transaction as the import reads it: the amount in minor units, the date "YYYY-MM-DD". */
+export interface StoredManualTransaction {
+  id: number
+  type: TransactionType
+  amount: Minor
+  currency: Currency
+  account: AccountId
+  merchant: string
+  categoryId: number | null
+  date: string
+}
+
+/** A validated POST/PUT /api/manual-transactions body: the amount in minor units, the currency the account's. */
+export type ManualTransactionInput = Omit<StoredManualTransaction, 'id'>
+
+/** A validated POST/PUT /api/schedules body: the amount in minor units, the currency the account's. */
+export type ScheduleInput = Omit<StoredSchedule, 'id'>

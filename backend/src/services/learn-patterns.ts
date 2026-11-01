@@ -1,53 +1,50 @@
-import { join } from 'node:path'
+import { existsSync } from 'node:fs'
 import { readMessages } from './ingest/reader'
 import { decode, DecodeError } from './ingest/decode'
-import { learnBank } from './patterns/learn'
-import { bankOf, loadPatternFiles, mergePatterns, savePatternFile } from './patterns/store'
+import { learnBank, type LearnedPattern } from './patterns/learn'
+import { bankOf } from './patterns/store'
+import { storeLearned } from '../db/patterns'
 import { config } from '../utils/config'
 import type { DecodedMessage } from '../utils/types'
 
-/**
- * Learns SMS patterns from chat.db and merges them into config/patterns/<bank>.json.
- *
- *   npm run patterns:learn
- *
- * New patterns are added disabled — review them and set "enabled": true.
- * Existing patterns keep your flags and edits (see mergePatterns).
- */
-
-const CHAT_DB_PATH = process.env.IMESSAGE_DB_PATH ?? join(process.cwd(), 'data', 'chat.db')
-
-const byBank = new Map<string, DecodedMessage[]>()
-let undecodable = 0
-for (const row of readMessages(CHAT_DB_PATH, config.bankSenders)) {
-  try {
-    const message = decode(row)
-    const bank = bankOf(message.sender)
-    const messages = byBank.get(bank)
-    if (messages) messages.push(message)
-    else byBank.set(bank, [message])
-  } catch (error) {
-    if (!(error instanceof DecodeError)) throw error
-    undecodable++
-  }
+export interface LearnSummary {
+  /** Bank SMS read */
+  messages: number
+  undecodable: number
+  /** Patterns not stored before, now pending review */
+  added: number
 }
-if (undecodable) console.log(`${undecodable} messages could not be decoded`)
 
-const existing = new Map(loadPatternFiles().map((f) => [f.bank, f]))
-for (const [bank, messages] of byBank) {
-  const senders = [...new Set(messages.map((m) => m.sender))]
-  const { file, added, missing } = mergePatterns(existing.get(bank), bank, senders, learnBank(bank, messages))
-  const path = savePatternFile(file)
+/**
+ * Learns SMS patterns from chat.db and stores them in sms_patterns
+ * (POST /api/patterns/learn, through run-learn.ts).
+ *
+ * New patterns are added pending, for review on the Learn page. Stored ones
+ * keep their status and text (see storeLearned). Unlike the import, an
+ * undecodable message is counted and left out instead of aborting the run.
+ */
+export async function learnFromChatDb(chatDbPath: string): Promise<LearnSummary> {
+  if (!existsSync(chatDbPath)) throw new Error(`chat.db not found at: ${chatDbPath}`)
 
-  const enabled = file.patterns.filter((p) => p.enabled).length
-  console.log(
-    `\n${bank}: ${messages.length} messages → ${file.patterns.length} patterns (${added} new, ${missing} missing, ${enabled} enabled) → ${path}`,
-  )
-  for (const p of file.patterns.filter((p) => !p.missing)) {
-    const flags = p.review ? `  ⚠ ${p.review.join('; ')}` : ''
-    console.log(
-      `  [${p.enabled ? 'on ' : 'off'}] ${String(p.messages).padStart(5)} ${(p.type ?? '').padEnd(10)} ${p.id}${flags}`,
-    )
-    console.log(`        ${p.pattern}`)
+  const byBank = new Map<string, DecodedMessage[]>()
+  let messages = 0
+  let undecodable = 0
+  for (const row of readMessages(chatDbPath, config.bankSenders)) {
+    messages++
+    try {
+      const message = decode(row)
+      const bank = bankOf(message.sender)
+      const bankMessages = byBank.get(bank)
+      if (bankMessages) bankMessages.push(message)
+      else byBank.set(bank, [message])
+    } catch (error) {
+      if (!(error instanceof DecodeError)) throw error
+      undecodable++
+    }
   }
+
+  const learned = new Map<string, LearnedPattern[]>()
+  for (const [bank, bankMessages] of byBank) learned.set(bank, learnBank(bank, bankMessages))
+  const added = await storeLearned(learned)
+  return { messages, undecodable, added }
 }

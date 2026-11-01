@@ -26,17 +26,46 @@ test.describe("transactions", () => {
     await page.goto("/transactions?yearMonth=2026-01");
     await expect(count(page)).toHaveText("4 transactions");
 
-    const [account, , transfer] = await page.getByRole("combobox").all();
-    await account.selectOption("checking");
+    await page
+      .getByRole("combobox", { name: "Account", exact: true })
+      .selectOption("checking");
     await expect(count(page)).toHaveText("2 transactions");
     await expect(page).toHaveURL(/account=checking/);
 
-    await transfer.selectOption("exclude");
+    await page
+      .getByRole("radiogroup", { name: "Transfers" })
+      .getByText("No transfers")
+      .click();
     await expect(count(page)).toHaveText("1 transaction");
     await expect(ledgerRows(page)).toContainText(["EMPLOYER LTD"]);
 
     await page.reload();
     await expect(count(page)).toHaveText("1 transaction");
+  });
+
+  test("a refetch leaves the table where it is", async ({ page }) => {
+    await page.goto("/transactions?yearMonth=2026-01&account=checking");
+    await expect(page.getByLabel("2 transactions")).toBeVisible();
+    const top = async () => (await page.getByRole("table").boundingBox())!.y;
+    const before = await top();
+
+    // Hold the next response so the page stays mid-fetch while it is measured.
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    await page.route("**/api/transactions?**", async (route) => {
+      await held;
+      await route.continue();
+    });
+    await page
+      .getByRole("radiogroup", { name: "Direction" })
+      .getByText("Money out")
+      .click();
+    await expect(page.getByRole("status", { name: "Updating" })).toBeVisible();
+    expect(await top()).toBe(before);
+
+    release();
+    await expect(page.getByRole("status", { name: "Updating" })).toBeHidden();
+    expect(await top()).toBe(before);
   });
 
   test("merchant search", async ({ page }) => {

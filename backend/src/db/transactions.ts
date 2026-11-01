@@ -3,6 +3,7 @@ import type {
   AccountId,
   Currency,
   ParsedTransaction,
+  Refusal,
   StagedTransaction,
   StoredTransaction,
   Transaction as OurTransaction,
@@ -32,12 +33,13 @@ function mapRow(row: PrismaRow): StoredTransaction {
     currency: row.currency as Currency,
     account: row.account as AccountId,
     merchant: row.merchant,
-    category: row.category,
+    categoryId: row.categoryId,
     counterAccount: row.counterAccount as AccountId | null,
     reportedBalance: row.reportedBalance === null ? null : decimalToMinor(row.reportedBalance),
     transactedAt: row.transactedAt,
     // The cleaned SMS body this row was parsed from; null on manual/CSV rows.
     rawText: row.rawText,
+    scheduleId: row.scheduleId,
     // Derived from counterAccount at extraction time — not a stored column.
     isTransfer: row.counterAccount !== null,
   }
@@ -47,12 +49,20 @@ function mapRow(row: PrismaRow): StoredTransaction {
   return row.type === 'credit' ? { ...shared, type: 'credit' } : { ...shared, type: 'debit' }
 }
 
-/** The API's shape of a row: money as a plain number of major units. */
-function toApi(tx: StoredTransaction): OurTransaction {
+/** Read with every row the API sends, for the category's name. */
+const WITH_CATEGORY = { category: { select: { name: true } } } satisfies Prisma.TransactionInclude
+
+type RowWithCategory = Prisma.TransactionGetPayload<{ include: typeof WITH_CATEGORY }>
+
+/** The API's shape of a row: money as a plain number of major units, and the category's name. */
+function toApi(row: RowWithCategory): OurTransaction {
+  const tx = mapRow(row)
   return {
     ...tx,
     amount: minorToNumber(tx.amount),
     reportedBalance: tx.reportedBalance === null ? null : minorToNumber(tx.reportedBalance),
+    categoryId: row.categoryId,
+    category: row.category?.name ?? null,
   }
 }
 
@@ -60,10 +70,7 @@ function toApi(tx: StoredTransaction): OurTransaction {
 // Input conversion — ParsedTransaction → Prisma create payload
 // ---------------------------------------------------------------------------
 
-function toCreateData(
-  tx: ParsedTransaction & { messageGuid?: string | null; sourceRowid?: bigint | null; rawText?: string | null },
-  yearMonth: string,
-): Prisma.TransactionCreateInput {
+function toCreateData(tx: ParsedTransaction, yearMonth: string): Prisma.TransactionCreateManyInput {
   return {
     yearMonth,
     type: tx.type,
@@ -71,7 +78,8 @@ function toCreateData(
     currency: tx.currency,
     account: tx.account,
     merchant: tx.merchant,
-    category: tx.category ?? null,
+    // A foreign key: an id that isn't a stored category fails the whole insert.
+    categoryId: tx.categoryId ?? null,
     reportedBalance: tx.reportedBalance === null ? null : minorToDecimal(tx.reportedBalance),
     transactedAt: tx.transactedAt,
     counterAccount: tx.counterAccount,
@@ -80,6 +88,8 @@ function toCreateData(
     messageGuid: tx.messageGuid ?? null,
     sourceRowid: tx.sourceRowid ?? null,
     rawText: tx.rawText ?? null,
+    // Set only on a schedule's occurrences (utils/helpers/schedule.ts).
+    scheduleId: tx.scheduleId ?? null,
   }
 }
 
@@ -120,30 +130,35 @@ export async function queryTransactions(filters: TransactionFilters, db: Db = pr
 
   const rows = await db.transaction.findMany({
     where,
+    include: WITH_CATEGORY,
     orderBy: [{ transactedAt: 'desc' }, { createdAt: 'desc' }],
   })
-  return rows.map((row) => toApi(mapRow(row)))
+  return rows.map(toApi)
 }
 
 /**
  * Sets (or clears, with `null`) the manual category on one transaction.
- * Returns the updated row, or null when no transaction has that id.
+ * Returns the updated row, or why it was refused: no transaction has that id,
+ * or no category does — the foreign key is what refuses an unknown category,
+ * so no write can store one.
  *
  * Categories are presentation-only — no balance or transfer state is derived
  * from them — so this never needs a balance recompute.
  */
 export async function updateCategory(
   id: string,
-  category: string | null,
+  categoryId: number | null,
   db: Db = prisma,
-): Promise<OurTransaction | null> {
+): Promise<OurTransaction | Refusal> {
   try {
-    const row = await db.transaction.update({ where: { id }, data: { category } })
-    return toApi(mapRow(row))
+    const row = await db.transaction.update({ where: { id }, data: { categoryId }, include: WITH_CATEGORY })
+    return toApi(row)
   } catch (err) {
-    // P2025 — "record to update not found". The route turns this into a 404;
-    // anything else is a real failure and keeps propagating.
-    if ((err as { code?: string }).code === 'P2025') return null
+    // P2025 — "record to update not found"; P2003 — a foreign key violation.
+    // Anything else is a real failure and keeps propagating.
+    const code = (err as { code?: string }).code
+    if (code === 'P2025') return { refused: 'not found', error: 'transaction not found' }
+    if (code === 'P2003') return { refused: 'invalid', error: `category ${categoryId} does not exist` }
     throw err
   }
 }

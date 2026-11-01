@@ -3,30 +3,38 @@ import { readMessages } from './ingest/reader'
 import type { DbRow, StagedTransaction, MinorBalance, StageMessages, RecomputeBalance } from '../utils/types'
 import { ALL_ACCOUNTS, config } from '../utils/config'
 import { decode } from './ingest/decode'
-import { parser } from './ingest/parser'
+import { createPatternParser, type PatternParser } from './ingest/parser'
 import { classifyTransfer } from './ingest/transfer'
 import { toYearMonth } from '../utils/helpers'
 import { upsertAllBalances } from '../db/balances'
 import { computeBalance } from './ingest/balance'
 import { createAllTransactions } from '../db/transactions'
 import { prisma } from '../db/client'
+import { loadEnabledPatterns } from '../db/patterns'
 import { ImportError, ImportSummary } from '../utils/types'
 import { loadCsvTransactions } from '../utils/helpers/csv-import'
 import { manualTransactions } from '../utils/helpers/manual-transactions'
+import { stageSchedules } from '../utils/helpers/schedule'
+import { loadSchedules } from '../db/schedules'
 
 export async function importFromChatDb(chatDbPath: string): Promise<ImportSummary> {
   if (!existsSync(chatDbPath)) throw new Error(`chat.db not found at: ${chatDbPath}`)
 
   const messages = readMessages(chatDbPath, config.bankSenders, undefined)
-  const { transactions, errors, earliest } = stageMessages(messages)
+  // Built from the table on every run, so a pattern enabled on the Learn page
+  // applies to this import without a restart.
+  const parser = createPatternParser(await loadEnabledPatterns())
+  const { transactions, errors, earliest } = stageMessages(messages, parser)
   // No SMS transaction means an empty or unreadable chat.db: keep the stored
   // ledger rather than rebuilding it out of the config entries alone.
   if (transactions.length === 0 || earliest === null) return { months: 0, totalStored: 0, errors }
 
-  // Manual and recurring entries are part of the ledger, not just of the
-  // balance math: they are stored next to the SMS rows so the transactions API
-  // shows the same set of rows the balances were computed from.
-  const stored = [...manualTransactions, ...transactions]
+  // Manual entries and the schedules' occurrences through today are part of
+  // the ledger, not just of the balance math: they are stored next to the SMS
+  // rows so the transactions API shows the same set of rows the balances were
+  // computed from. Each occurrence carries its schedule's id.
+  const scheduled = stageSchedules(await loadSchedules(), new Date())
+  const stored = [...manualTransactions, ...scheduled, ...transactions]
   const { balances, months } = await recomputeBalances(stored)
 
   await prisma.$transaction(
@@ -42,7 +50,7 @@ export async function importFromChatDb(chatDbPath: string): Promise<ImportSummar
   return { months, totalStored: stored.length, errors }
 }
 
-function stageMessages(messages: DbRow[]): StageMessages {
+function stageMessages(messages: DbRow[], parser: PatternParser): StageMessages {
   const transactions: StagedTransaction[] = []
   const errors: ImportError[] = []
   let earliest: string | null = null
@@ -69,7 +77,7 @@ function stageMessages(messages: DbRow[]): StageMessages {
   return { transactions, errors, earliest, maxRowid }
 }
 
-// `staged` already carries the manual and recurring entries; only the CSV rows
+// `staged` already carries the manual entries and scheduled occurrences; only the CSV rows
 // are still balance-only, loaded per month below.
 async function recomputeBalances(staged: StagedTransaction[]): RecomputeBalance {
   const byMonth = groupByMonth(staged)

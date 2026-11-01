@@ -1,14 +1,14 @@
 import { resolve } from 'node:path'
 import { defineConfig } from 'vitest/config'
 
-// Every run loads the synthetic fixtures, never config/wealthi.json or your
-// learned patterns. Set before any src module loads, since config is read at import.
+// Every run loads the synthetic fixtures, never config/wealthi.json. Set before
+// any src module loads, since config is read at import. Patterns come from the
+// test database, which test/setup/reset.ts fills with test/fixtures/patterns.
 const env = {
   NODE_ENV: 'test',
   // Month bucketing uses local time; pin it so results don't depend on the machine.
   TZ: 'UTC',
   WEALTHI_CONFIG_PATH: resolve(import.meta.dirname, 'test/fixtures/wealthi.test.json'),
-  WEALTHI_PATTERNS_DIR: resolve(import.meta.dirname, 'test/fixtures/patterns'),
 }
 
 export default defineConfig({

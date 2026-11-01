@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { createPatternParser, ParseError, parser } from '../../src/services/ingest/parser'
+import { createPatternParser, ParseError } from '../../src/services/ingest/parser'
 import type { Pattern } from '../../src/services/patterns/pattern'
 import { classifyTransfer } from '../../src/services/ingest/transfer'
 import type { DecodedMessage } from '../../src/utils/types'
+import { fixtureParser as parser } from '../fixtures/pattern-files'
 
 // `parser` is built from test/fixtures/patterns and resolves accounts through
-// test/fixtures/wealthi.test.json (see vitest.config.ts).
+// test/fixtures/wealthi.test.json (see vitest.config.mts).
 
 const message = (text: string, sender = 'Test Bank'): DecodedMessage => ({
   rowid: 1n,
@@ -56,9 +57,9 @@ describe('parser', () => {
     expect(r.error.cause).toContain(cause)
   })
 
-  it('reports an unknown sender', () => {
-    const r = createPatternParser([])(message('anything', 'Stranger'))
-    expect(r).toMatchObject({ ok: false, skipped: false })
+  it('finds the bank from the sender, however it is spelled', () => {
+    const r = parser(message('Your one-time password is 1.', '  TEST bank!'))
+    expect(r).toMatchObject({ ok: false, error: { cause: 'no enabled pattern matched' } })
   })
 })
 
@@ -67,7 +68,6 @@ describe('parser rejections', () => {
     createPatternParser([
       {
         bank: 'test-bank',
-        senders: ['Test Bank'],
         patterns: [{ id: 'test-bank:p', enabled: true, type, pattern, generated: pattern, reason: '', messages: 0 }],
       },
     ])
@@ -214,10 +214,10 @@ describe('classifyTransfer', () => {
 })
 
 describe('parser error text', () => {
-  it('names the parser and the unknown sender', () => {
+  it('names the parser and the sender whose bank has no enabled patterns', () => {
     const r = createPatternParser([])(message('anything', 'Stranger'))
     if (r.ok || r.skipped) throw new Error('expected a parse error')
-    expect(r.error.cause).toBe('no pattern file for sender "Stranger"')
+    expect(r.error.cause).toBe('no enabled patterns for sender "Stranger"')
     expect(r.error.message).toMatch(/^\[patterns\] failed to parse/)
   })
 })

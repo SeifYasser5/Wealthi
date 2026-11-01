@@ -1,6 +1,6 @@
 import { amountColor, isBalanced, money, type RowValues } from '../../../utils/utils'
 
-const CELL = 'whitespace-nowrap px-4 py-3'
+const CELL = 'whitespace-nowrap px-4 py-3.5'
 const NUM = `${CELL} text-right tabular-nums`
 const GREEN = 'text-positive'
 const RED = 'text-negative'
@@ -24,12 +24,8 @@ export function BalanceRow({
   const { openingBalance, closingBalance, lastReportedBalance, discrepancy } = values
 
   return (
-    <tr className={isTotal ? 'font-semibold' : 'transition hover:bg-primary-soft'}>
-      <td
-        className={`${CELL} ${isTotal ? 'text-xs uppercase tracking-wide text-foreground' : 'font-medium text-foreground'}`}
-      >
-        {label}
-      </td>
+    <tr className={isTotal ? 'font-semibold' : 'transition-colors hover:bg-surface-raised'}>
+      <td className={`${CELL} ${isTotal ? 'text-foreground' : 'font-medium text-foreground'}`}>{label}</td>
       <td className={`${NUM} ${amountColor(openingBalance)}`}>{money(openingBalance)}</td>
       <td className={`${NUM} ${GREEN}`}>{money(values.credits)}</td>
       <td className={`${NUM} ${RED}`}>{money(values.debits)}</td>

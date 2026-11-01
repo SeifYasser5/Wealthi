@@ -1,14 +1,16 @@
 import type { Currency, DecodedMessage, ParsedTransaction } from '../../utils/types'
 import { ACCOUNTS, accountFor } from '../../utils/config'
 import { CURRENCIES, extract, type Pattern, type PatternFile } from '../patterns/pattern'
-import { loadPatternFiles } from '../patterns/store'
+import { bankOf } from '../patterns/store'
 import { parseMinor, type Minor } from '../../utils/money'
 import { sanitizeMessageText } from './sanitize'
 
 /**
- * Parses bank SMS with the enabled patterns in config/patterns.
+ * Parses bank SMS with the enabled learned patterns. The importer builds one per
+ * run from the sms_patterns table (loadEnabledPatterns), so a pattern enabled on
+ * the Learn page applies to the next import.
  *
- * A message is matched against its sender's enabled patterns:
+ * A message is matched against the enabled patterns of its bank, bankOf(sender):
  * - a match → a ParsedTransaction
  * - a charge in another currency than its account (a USD charge on an EGP
  *   card) → skipped: the SMS doesn't say what it cost in the account currency
@@ -39,12 +41,15 @@ export type PatternParseResult =
 
 const PARSER = 'patterns'
 
-export function createPatternParser(files: PatternFile[]): (message: DecodedMessage) => PatternParseResult {
-  const bySender = new Map<string, { bank: string; enabled: Pattern[] }>()
-  for (const file of files) {
-    const enabled = file.patterns.filter((p) => p.enabled)
-    for (const sender of file.senders) bySender.set(sender, { bank: file.bank, enabled })
-  }
+export type PatternParser = (message: DecodedMessage) => PatternParseResult
+
+export function createPatternParser(files: PatternFile[]): PatternParser {
+  const byBank = new Map<string, Pattern[]>()
+  for (const file of files)
+    byBank.set(
+      file.bank,
+      file.patterns.filter((p) => p.enabled),
+    )
 
   return (message) => {
     const fail = (cause: string): PatternParseResult => ({
@@ -53,10 +58,11 @@ export function createPatternParser(files: PatternFile[]): (message: DecodedMess
       error: new ParseError(PARSER, message.text, cause),
     })
 
-    const source = bySender.get(message.sender)
-    if (!source) return fail(`no pattern file for sender "${message.sender}"`)
+    const bank = bankOf(message.sender)
+    const enabled = byBank.get(bank)
+    if (!enabled) return fail(`no enabled patterns for sender "${message.sender}"`)
 
-    const x = extract(source.bank, source.enabled, message.text)
+    const x = extract(bank, enabled, message.text)
     if (!x) return fail('no enabled pattern matched')
 
     const where = `pattern ${x.patternId}`
@@ -105,5 +111,3 @@ export function createPatternParser(files: PatternFile[]): (message: DecodedMess
     }
   }
 }
-
-export const parser = createPatternParser(loadPatternFiles())

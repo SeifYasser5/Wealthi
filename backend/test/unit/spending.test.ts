@@ -14,9 +14,13 @@ const tx = (merchant: string | null, amount: number, category: string | null = n
   transactedAt: new Date('2026-01-10T12:00:00Z'),
 })
 
+/** The merchant map, as loadMerchantCategories() reads it from merchant_categories. */
+const MERCHANTS = new Map([['ACME GROCERS', 'Groceries']])
+const build = (txs: SpendingTransaction[]) => buildSpendingBreakdown('2026-01', txs, MERCHANTS)
+
 describe('buildSpendingBreakdown', () => {
   it('is empty for a month with no spending', () => {
-    expect(buildSpendingBreakdown('2026-01', [])).toEqual({
+    expect(build([])).toEqual({
       yearMonth: '2026-01',
       grandTotal: 0,
       categories: [],
@@ -26,7 +30,7 @@ describe('buildSpendingBreakdown', () => {
   })
 
   it('groups by category then merchant, largest first, rounding totals', () => {
-    const r = buildSpendingBreakdown('2026-01', [
+    const r = build([
       tx('ACME GROCERS', 1010),
       tx('ACME GROCERS', 2020),
       tx('SOMEWHERE', 5000, 'Groceries'),
@@ -48,7 +52,7 @@ describe('buildSpendingBreakdown', () => {
 
   it('lists small uncategorized rows individually and rolls them into the Uncategorized bucket', () => {
     const small = tx(null, 100)
-    const r = buildSpendingBreakdown('2026-01', [tx('BISTRO', 9900, 'Dining'), small])
+    const r = build([tx('BISTRO', 9900, 'Dining'), small])
     expect(r.uncategorized).toEqual([
       { id: small.id, merchant: null, amount: 1, account: 'card', transactedAt: '2026-01-10T12:00:00.000Z', pct: 1 },
     ])
@@ -62,7 +66,7 @@ describe('buildSpendingBreakdown', () => {
 
   it('promotes an uncategorized row of 5%+ to its own line instead of the bucket', () => {
     const big = tx('MYSTERY', 500)
-    const r = buildSpendingBreakdown('2026-01', [tx('BISTRO', 9500, 'Dining'), big])
+    const r = build([tx('BISTRO', 9500, 'Dining'), big])
     expect(r.largeTransactions).toEqual([{ id: big.id, merchant: 'MYSTERY', amount: 5, account: 'card', pct: 5 }])
     expect(r.uncategorized).toEqual([])
     expect(r.categories.map((c) => c.category)).toEqual(['Dining'])
@@ -70,14 +74,14 @@ describe('buildSpendingBreakdown', () => {
 
   it('rounds the 5% threshold half up to a minor unit', () => {
     // 5% of 10.10 is 0.505, so the threshold is 0.51.
-    const at = buildSpendingBreakdown('2026-01', [tx('BISTRO', 959, 'Dining'), tx('MYSTERY', 51)])
+    const at = build([tx('BISTRO', 959, 'Dining'), tx('MYSTERY', 51)])
     expect(at.largeTransactions).toHaveLength(1)
-    const under = buildSpendingBreakdown('2026-01', [tx('BISTRO', 960, 'Dining'), tx('MYSTERY', 50)])
+    const under = build([tx('BISTRO', 960, 'Dining'), tx('MYSTERY', 50)])
     expect(under.largeTransactions).toEqual([])
   })
 
   it('keeps a row just under 5% in the bucket', () => {
-    const r = buildSpendingBreakdown('2026-01', [tx('BISTRO', 9510, 'Dining'), tx('MYSTERY', 490)])
+    const r = build([tx('BISTRO', 9510, 'Dining'), tx('MYSTERY', 490)])
     expect(r.largeTransactions).toEqual([])
     expect(r.uncategorized).toHaveLength(1)
   })
@@ -85,7 +89,7 @@ describe('buildSpendingBreakdown', () => {
 
 describe('buildSpendingBreakdown with a zero total', () => {
   it('neither divides by zero nor promotes a zero-amount row', () => {
-    const r = buildSpendingBreakdown('2026-01', [tx('FREEBIE', 0)])
+    const r = build([tx('FREEBIE', 0)])
     expect(r.grandTotal).toBe(0)
     expect(r.largeTransactions).toEqual([])
     expect(r.uncategorized).toEqual([expect.objectContaining({ merchant: 'FREEBIE', pct: 0 })])

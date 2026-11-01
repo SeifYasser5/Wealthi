@@ -13,7 +13,8 @@
  * merchantCategories and transferRules, so keep the two files in step.
  */
 
-export const DEMO_SENDER = 'DemoBank'
+/** bankOf() of it is demo-bank, the bank of backend/demo/patterns/demo-bank.json. */
+export const DEMO_SENDER = 'Demo Bank'
 /** Every demo message guid starts with this; seedDemo() refuses a database holding any other. */
 export const DEMO_GUID_PREFIX = 'demo-'
 /**

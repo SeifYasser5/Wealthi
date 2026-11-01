@@ -1,4 +1,5 @@
-import { useCategories, useUpdateTransactionCategory } from '../../../hooks/useSpending'
+import { useCategories } from '../../../hooks/useCategories'
+import { useUpdateTransactionCategory } from '../../../hooks/useSpending'
 
 /**
  * Assigns a category to a single transaction. The mutation is shared across all
@@ -21,16 +22,16 @@ export function CategorySelect({ transactionId }: { transactionId: string }) {
         disabled={pending || !categoryData}
         onChange={(e) => {
           const next = e.target.value
-          if (next) mutation.mutate({ id: transactionId, category: next })
+          if (next) mutation.mutate({ id: transactionId, categoryId: Number(next) })
         }}
-        className={`rounded-lg border px-2 py-1 text-xs text-subtle transition disabled:text-muted ${
-          failed ? 'border-negative' : 'border-line'
-        } bg-background hover:border-primary focus:border-primary focus:outline-none`}
+        className={`rounded-full border bg-surface-raised px-3 py-1 text-xs font-medium text-subtle transition-colors hover:bg-surface-hover hover:text-foreground focus:border-primary focus:outline-none disabled:cursor-wait disabled:text-muted ${
+          failed ? 'border-negative' : 'border-transparent'
+        }`}
       >
         <option value="">{pending ? 'Saving…' : 'Categorize…'}</option>
         {categoryData?.categories.map((c) => (
-          <option key={c} value={c}>
-            {c}
+          <option key={c.id} value={c.id}>
+            {c.name}
           </option>
         ))}
       </select>

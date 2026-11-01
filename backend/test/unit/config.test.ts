@@ -7,8 +7,9 @@ import { WealthiConfigSchema, pruneUnknownAccounts } from '../../src/utils/confi
 
 type ConfigInput = z.input<typeof WealthiConfigSchema>
 type CsvInput = NonNullable<ConfigInput['csvImports']>[number]
+type RecurringInput = NonNullable<ConfigInput['recurringTransactions']>[number]
 
-const valid = (): ConfigInput & { csvImports: CsvInput[] } => ({
+const valid = (): ConfigInput & { csvImports: CsvInput[]; recurringTransactions: RecurringInput[] } => ({
   bankSenders: ['Bank'],
   accounts: [
     { id: 'a', label: 'A', currency: 'EGP' },
@@ -60,6 +61,18 @@ describe('WealthiConfigSchema', () => {
     expect(WealthiConfigSchema.parse(withoutCsv).csvImports).toEqual([])
   })
 
+  it('defaults the category seed keys to nothing, and trims their names', () => {
+    const c: ConfigInput = valid()
+    delete c.merchantCategories
+    delete c.extraCategories
+    expect(WealthiConfigSchema.parse(c)).toMatchObject({ merchantCategories: {}, extraCategories: [] })
+    const parsed = WealthiConfigSchema.parse({ ...valid(), merchantCategories: { CAFE: ' Dining ' }, extraCategories: [' Rent'] }) // prettier-ignore
+    expect(parsed).toMatchObject({ merchantCategories: { CAFE: 'Dining' }, extraCategories: ['Rent'] })
+    expect(issues({ ...valid(), extraCategories: ['  '] })).toContainEqual(
+      expect.stringMatching(/^extraCategories\.0:/),
+    )
+  })
+
   it('requires at least one sender and one account', () => {
     expect(issues({ ...valid(), bankSenders: [] })).toContainEqual(expect.stringMatching(/^bankSenders:/))
     expect(issues({ ...valid(), accounts: [], openingBalances: {} }).join()).toMatch(/accounts:/)
@@ -80,6 +93,11 @@ describe('WealthiConfigSchema', () => {
     c.manualTransactions[0].account = 'x4'
     c.csvImports[0] = { ...c.csvImports[0], account: 'x5', counterAccount: 'x6' }
     expect(issues(c)).toEqual([])
+  })
+
+  it('defaults recurringTransactions, a seed-only key, to none', () => {
+    const c: ConfigInput = { ...valid(), recurringTransactions: undefined }
+    expect(WealthiConfigSchema.parse(c).recurringTransactions).toEqual([])
   })
 
   it('requires an opening balance for every account', () => {

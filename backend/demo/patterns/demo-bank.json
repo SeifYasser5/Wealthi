@@ -1,6 +1,5 @@
 {
   "bank": "demo-bank",
-  "senders": ["DemoBank"],
   "patterns": [
     {
       "id": "demo-bank:7f45f49d26",

@@ -1,4 +1,5 @@
 import type { CategoryRow, LargeTransactionRow, SpendingResponse, UncategorizedTransactionRow } from '@wealthi/shared'
+import { loadMerchantCategories } from '../db/categories'
 import { getSpendingTransactions } from '../db/spending'
 import type { SpendingTransaction } from '../utils/types'
 import { resolveCategory, UNCATEGORIZED, UNKNOWN_MERCHANT } from '../utils/categories'
@@ -13,14 +14,19 @@ const LARGE_TX_PERCENT = 5
  * merchant, ordered by total descending within each level.
  *
  * A transaction's category is its manual `category` when set, otherwise the
- * merchant map. Everything still unresolved is listed row-by-row under
+ * merchant map (merchant_categories). Everything still unresolved is listed row-by-row under
  * `uncategorized` (or `largeTransactions`) so it can be assigned one.
  */
 export async function getSpendingBreakdown(yearMonth: string): Promise<SpendingResponse> {
-  return buildSpendingBreakdown(yearMonth, await getSpendingTransactions(yearMonth))
+  const [txs, merchantCategories] = await Promise.all([getSpendingTransactions(yearMonth), loadMerchantCategories()])
+  return buildSpendingBreakdown(yearMonth, txs, merchantCategories)
 }
 
-export function buildSpendingBreakdown(yearMonth: string, txs: SpendingTransaction[]): SpendingResponse {
+export function buildSpendingBreakdown(
+  yearMonth: string,
+  txs: SpendingTransaction[],
+  merchantCategories: ReadonlyMap<string, string>,
+): SpendingResponse {
   // Totals are summed in minor units and become numbers only in the response.
   const grandTotal = txs.reduce((sum, tx) => sum + tx.amount, 0) as Minor
   // A ratio, not money: the minor-unit scale cancels out.
@@ -36,7 +42,7 @@ export function buildSpendingBreakdown(yearMonth: string, txs: SpendingTransacti
   const categoryMap = new Map<string, { total: Minor; merchants: Map<string, Minor> }>()
 
   for (const tx of txs) {
-    const category = resolveCategory(tx.merchant, tx.category)
+    const category = resolveCategory(tx.merchant, tx.category, merchantCategories)
 
     if (category === UNCATEGORIZED) {
       // Promoted rows are shown as their own card, so they are listed once —

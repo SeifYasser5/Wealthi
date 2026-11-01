@@ -58,12 +58,12 @@ describe('other fetchers', () => {
         return HttpResponse.json({ transaction: { id: params.id } })
       }),
     )
-    const res = await updateTransactionCategory('abc', 'Rent')
+    const res = await updateTransactionCategory('abc', 3)
     expect(res.transaction.id).toBe('abc')
-    expect(body).toEqual({ category: 'Rent' })
+    expect(body).toEqual({ categoryId: 3 })
     expect(contentType).toBe('application/json')
     await updateTransactionCategory('abc', null)
-    expect(body).toEqual({ category: null })
+    expect(body).toEqual({ categoryId: null })
   })
 })
 

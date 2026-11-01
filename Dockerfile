@@ -26,7 +26,6 @@ ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     WEALTHI_DEMO=true \
     WEALTHI_CONFIG_PATH=/app/backend/demo/wealthi.demo.json \
-    WEALTHI_PATTERNS_DIR=/app/backend/demo/patterns \
     WEALTHI_STATIC_DIR=/app/frontend/dist
 
 WORKDIR /app/backend

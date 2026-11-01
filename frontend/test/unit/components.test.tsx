@@ -98,6 +98,7 @@ describe('FilterBar', () => {
     onTypeChange: noop,
     onTransferChange: noop,
     onCounterAccountChange: noop,
+    onClear: noop,
   } as const
 
   it('resyncs the search box when the merchant filter changes from outside', () => {

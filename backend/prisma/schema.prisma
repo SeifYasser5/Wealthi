@@ -37,8 +37,10 @@ model Transaction {
   account         String
   merchant        String?
   /// Manual per-transaction spending category. Null means "not set" — the
-  /// spending breakdown then falls back to the merchant map in utils/categories.ts.
-  category        String?
+  /// spending breakdown then falls back to merchant_categories. A foreign key,
+  /// so a transaction can only name a stored category.
+  categoryId      Int?            @map("category_id")
+  category        Category?       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   reportedBalance Decimal?        @map("reported_balance") @db.Decimal(12, 2)
   transactedAt    DateTime        @map("transacted_at") @db.Timestamptz
   /// Non-null only when type = 'transfer'
@@ -55,11 +57,109 @@ model Transaction {
   /// detail modal and used to diagnose a mis-parse without chat.db.
   /// Null for non-SMS rows (manual entries / CSV legs).
   rawText         String?         @map("raw_text")
+  /// The schedule this row is an occurrence of; null for every other row. Set
+  /// null when the schedule is deleted, until the next import drops the row.
+  scheduleId      Int?            @map("schedule_id")
+  schedule        Schedule?       @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
 
   @@index([yearMonth, account])
-  @@index([yearMonth, category])
+  @@index([yearMonth, categoryId])
   @@index([account, transactedAt(sort: Asc, nulls: Last)])
   @@map("transactions")
+}
+
+/// A spending category: what a transaction can be assigned to, edited on the
+/// Categories page. `position` is the order every category list shows them in.
+/// A category still used by a transaction, a merchant or a schedule can't be
+/// deleted: the foreign keys restrict it.
+model Category {
+  id           Int                @id @default(autoincrement())
+  /// Unique; the API also refuses one differing only in case, and "Uncategorized"
+  name         String             @unique
+  position     Int
+  /// Monthly allowance, set on the Budget view of Spending; null means no budget.
+  budget       Decimal?           @db.Decimal(12, 2)
+  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  transactions Transaction[]
+  merchants    MerchantCategory[]
+  schedules    Schedule[]
+  manualTransactions ManualTransaction[]
+
+  @@map("categories")
+}
+
+/// How often a schedule repeats, in units of `interval`.
+enum Frequency {
+  daily
+  weekly
+  monthly
+  yearly
+}
+
+/// A transaction that repeats on its own: rent, a subscription, a salary with
+/// no SMS. Edited on the Schedules page. Every import stores one row per
+/// occurrence from `startDate` through today (or `endDate`), each marked with
+/// this id — so an edit applies to every occurrence at the next import.
+model Schedule {
+  id         Int             @id @default(autoincrement())
+  type       TransactionType
+  /// Always positive — direction is encoded in `type`
+  amount     Decimal         @db.Decimal(12, 2)
+  currency   Currency
+  /// Own account id — one of `accounts` in config/wealthi.json
+  account    String
+  merchant   String
+  /// Given to every occurrence; null lets the merchant map decide
+  categoryId Int?            @map("category_id")
+  category   Category?       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  frequency  Frequency
+  /// Every `interval` days/weeks/months/years: 2 with weekly is every other week
+  interval   Int             @default(1)
+  /// The first occurrence; monthly and yearly ones fall on its day (clamped to
+  /// the month's last day)
+  startDate  DateTime        @map("start_date") @db.Date
+  /// The last day an occurrence may fall on; null repeats indefinitely
+  endDate    DateTime?       @map("end_date") @db.Date
+  createdAt  DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  transactions Transaction[]
+
+  @@map("schedules")
+}
+
+/// A one-off transaction entered by hand on the Manual page (a bank fee, a
+/// reversal, an adjustment) or seeded from config's manualTransactions. It lives
+/// here, not only in `transactions`, because every import rebuilds `transactions`
+/// from scratch: the import copies each of these into it, so they survive.
+model ManualTransaction {
+  id         Int             @id @default(autoincrement())
+  type       TransactionType
+  /// Always positive — direction is encoded in `type`
+  amount     Decimal         @db.Decimal(12, 2)
+  currency   Currency
+  /// Own account id — one of `accounts` in config/wealthi.json
+  account    String
+  merchant   String
+  /// Given to the copied transaction; null lets the merchant map decide
+  categoryId Int?            @map("category_id")
+  category   Category?       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  /// The calendar day it happened on (local time)
+  date       DateTime        @db.Date
+  createdAt  DateTime        @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([date])
+  @@map("manual_transactions")
+}
+
+/// The merchant map: a transaction with no manual category counts towards its
+/// merchant's. Seeded once from config's merchantCategories (db/categories.ts).
+model MerchantCategory {
+  /// Merchant exactly as printed by the bank
+  merchant   String   @id
+  categoryId Int      @map("category_id")
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@index([categoryId])
+  @@map("merchant_categories")
 }
 
 /// Single-row watermark for incremental imports. Holds the highest chat.db
@@ -93,4 +193,42 @@ model MonthlyBalance {
 
   @@id([yearMonth, account])
   @@map("monthly_balances")
+}
+
+/// Where a learned pattern stands. Learn adds new ones as `pending`; the Learn
+/// page's review turns each into `enabled` or `disabled`. Only enabled ones parse.
+enum PatternStatus {
+  pending
+  enabled
+  disabled
+}
+
+/// A learned SMS template (services/patterns/). The import builds its parser
+/// from the enabled rows at the start of every run, so a change here applies
+/// to the next import without a restart.
+model SmsPattern {
+  /// "<bank>:<hash of the mined template>" — stable across learn runs, so a
+  /// relearn recognises a template it has already stored
+  id        String        @id
+  /// bankOf(sender), e.g. "adcb-egypt"; a message is matched against its bank's patterns
+  bank      String
+  status    PatternStatus @default(pending)
+  /// debit | credit | by-keyword
+  type      String
+  pattern   String
+  /// What the latest learn run produced; differs from `pattern` once the labeller changes
+  generated String
+  /// Why learn labelled it this way
+  reason    String
+  /// Things to check before enabling
+  review    String[]
+  /// Messages it matched in the latest learn run
+  messages  Int
+  /// Not produced by the latest learn run of its bank (kept so its status isn't lost)
+  missing   Boolean       @default(false)
+  learnedAt DateTime      @default(now()) @map("learned_at") @db.Timestamptz
+  updatedAt DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([status])
+  @@map("sms_patterns")
 }

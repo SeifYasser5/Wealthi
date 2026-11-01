@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  describeCadence,
+  formatCalendarDay,
+  frequencyUnit,
+  ordinal,
+  today,
   amountColor,
   buildComputedBalances,
   currentYearMonth,
@@ -192,5 +197,49 @@ describe('sumGroup', () => {
   it('keeps the discrepancy null when no account reports one', () => {
     expect(sumGroup([balance({ account: 'a' })]).discrepancy).toBeNull()
     expect(sumGroup([]).discrepancy).toBeNull()
+  })
+})
+
+describe('schedule helpers', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('describes every cadence, singular and plural', () => {
+    const at = (frequency: 'daily' | 'weekly' | 'monthly' | 'yearly', interval: number) =>
+      describeCadence({ frequency, interval, startDate: '2026-03-02' })
+    expect([at('daily', 1), at('daily', 3)]).toEqual(['Every day', 'Every 3 days'])
+    expect([at('weekly', 1), at('weekly', 2)]).toEqual(['Every week on Monday', 'Every 2 weeks on Monday'])
+    expect([at('monthly', 1), at('monthly', 6)]).toEqual(['Every month on the 2nd', 'Every 6 months on the 2nd'])
+    expect([at('yearly', 1), at('yearly', 2)]).toEqual(['Every year on Mar 2', 'Every 2 years on Mar 2'])
+  })
+
+  it('names the unit by how many', () => {
+    expect([frequencyUnit('daily', 1), frequencyUnit('yearly', 2)]).toEqual(['day', 'years'])
+  })
+
+  it.each([
+    [1, '1st'],
+    [2, '2nd'],
+    [3, '3rd'],
+    [4, '4th'],
+    [11, '11th'],
+    [12, '12th'],
+    [13, '13th'],
+    [21, '21st'],
+    [22, '22nd'],
+    [23, '23rd'],
+    [30, '30th'],
+    [31, '31st'],
+    [111, '111th'],
+  ])('ordinal(%i) is %s', (n, expected) => {
+    expect(ordinal(n)).toBe(expected)
+  })
+
+  it('formats a calendar day as the day it names, in any time zone', () => {
+    expect(formatCalendarDay('2026-02-01')).toBe('Feb 01, 2026')
+  })
+
+  it('gives today as a local calendar day', () => {
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date(2026, 0, 5, 23, 30) })
+    expect(today()).toBe('2026-01-05')
   })
 })

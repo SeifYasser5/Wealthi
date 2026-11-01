@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ChevronDown } from 'lucide-react'
 import type { CategoryRow, UncategorizedTransactionRow } from '@wealthi/shared'
 import { money, plural } from '../../../utils/utils'
 import { SpendingBar } from './SpendingBar'
@@ -24,7 +25,8 @@ export function CategoryCard({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-4 px-5 py-4 text-left transition hover:bg-surface-hover"
+        aria-expanded={open}
+        className="flex w-full items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-surface-raised focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
       >
         <SpendingBar
           label={row.category}
@@ -38,7 +40,11 @@ export function CategoryCard({
               : plural(row.merchants.length, 'merchant')
           }
         />
-        <span className="text-muted text-sm">{open ? '▲' : '▼'}</span>
+        <ChevronDown
+          size={18}
+          aria-hidden
+          className={`shrink-0 text-muted transition-transform ${open ? 'rotate-180' : ''}`}
+        />
       </button>
 
       {open && (
@@ -52,8 +58,8 @@ export function CategoryCard({
               <tbody>
                 {row.merchants.map((m) => (
                   <tr key={m.merchant} className="border-b border-line last:border-0">
-                    <td className="py-1.5 text-subtle">{m.merchant}</td>
-                    <td className="py-1.5 text-right font-mono text-foreground">{money(m.total)}</td>
+                    <td className="py-2 text-subtle">{m.merchant}</td>
+                    <td className="py-2 text-right tabular-nums text-foreground">{money(m.total)}</td>
                   </tr>
                 ))}
               </tbody>

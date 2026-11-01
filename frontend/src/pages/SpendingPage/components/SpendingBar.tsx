@@ -6,7 +6,7 @@ type Accent = 'primary' | 'warning' | 'muted'
 const ACCENTS: Record<Accent, { label: string; badge: string; bar: string }> = {
   primary: { label: 'text-foreground', badge: 'bg-primary-soft text-primary', bar: 'bg-primary' },
   warning: { label: 'text-foreground', badge: 'bg-warning-soft text-warning', bar: 'bg-warning' },
-  muted: { label: 'text-muted', badge: 'bg-line text-muted', bar: 'bg-line' },
+  muted: { label: 'text-muted', badge: 'bg-surface-hover text-muted', bar: 'bg-muted' },
 }
 
 /** Shared body of a spending card: label + badge + amount, share-of-total bar, footer line.
@@ -33,16 +33,16 @@ export function SpendingBar({
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <span className={`font-semibold ${colors.label}`}>{label}</span>
-          <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-xs font-bold tabular-nums ${colors.badge}`}>
+          <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold tabular-nums ${colors.badge}`}>
             {badge}
           </span>
         </div>
-        <span className="shrink-0 font-mono text-sm font-medium text-subtle">{money(amount)}</span>
+        <span className="shrink-0 text-base font-medium tabular-nums text-foreground">{money(amount)}</span>
       </div>
-      <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-line">
+      <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-surface-hover">
         <div className={`h-full rounded-full transition-all ${colors.bar}`} style={{ width: `${pct.toFixed(1)}%` }} />
       </div>
-      <div className="mt-1 flex items-center justify-between gap-2 text-xs text-muted">{footer}</div>
+      <div className="mt-2 flex items-center justify-between gap-2 text-xs text-muted">{footer}</div>
     </div>
   )
 }

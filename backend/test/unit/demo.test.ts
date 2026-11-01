@@ -44,7 +44,7 @@ describe('demoLedger', () => {
     }
   })
 
-  it('is what patterns:learn mines: the committed pattern file is its output, reviewed', () => {
+  it('is what learn mines: the committed pattern file is its output, reviewed', () => {
     const file = JSON.parse(readFileSync(resolve(DEMO_PATTERNS_DIR, 'demo-bank.json'), 'utf8')) as PatternFile
     const decoded = ledger.map((m, i) => ({ ...m, rowid: BigInt(i + 1), messageDate: m.date }))
     const learned = learnBank(file.bank, decoded)

@@ -1,7 +1,15 @@
 // Shared frontend helpers: display formatting, "YYYY-MM" month helpers
 // and the pure data helpers the components and hooks use.
 
-import type { AccountBalance, Currency, Transaction, TransactionType, TransferFilter } from '@wealthi/shared'
+import type {
+  AccountBalance,
+  Currency,
+  Frequency,
+  Schedule,
+  Transaction,
+  TransactionType,
+  TransferFilter,
+} from '@wealthi/shared'
 
 // ─── Currencies ──────────────────────────────────────────────────────────────
 
@@ -173,4 +181,57 @@ export function sumGroup(group: AccountBalance[]): RowValues {
   }
 
   return { ...totals, lastReportedBalance: null, discrepancy }
+}
+
+// ─── Schedules ───────────────────────────────────────────────────────────────
+
+/** A "YYYY-MM-DD" calendar day as a local Date (not UTC midnight, which can read as the day before). */
+function dayToDate(day: string): Date {
+  const [year, month, date] = day.split('-').map(Number)
+  return new Date(year, month - 1, date)
+}
+
+/** Today's local calendar day as "YYYY-MM-DD", for a date input. */
+export function today(): string {
+  const d = new Date()
+  return `${toYearMonth(d)}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/** "2026-02-18" -> "18 Feb 2026", the same as formatDate. */
+export function formatCalendarDay(day: string): string {
+  return formatDate(dayToDate(day).toISOString())
+}
+
+/** 1 -> "1st", 22 -> "22nd", 13 -> "13th". */
+export function ordinal(n: number): string {
+  const tens = n % 100
+  const suffix = tens >= 11 && tens <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th')
+  return `${n}${suffix}`
+}
+
+const UNITS: Record<Frequency, string> = { daily: 'day', weekly: 'week', monthly: 'month', yearly: 'year' }
+
+/** "day" / "days" for a frequency, by how many of them. */
+export function frequencyUnit(frequency: Frequency, interval: number): string {
+  return interval === 1 ? UNITS[frequency] : `${UNITS[frequency]}s`
+}
+
+/** "Every month on the 5th", "Every 2 weeks on Monday", "Every day" — when a schedule falls. */
+export function describeCadence({
+  frequency,
+  interval,
+  startDate,
+}: Pick<Schedule, 'frequency' | 'interval' | 'startDate'>) {
+  const every = interval === 1 ? `Every ${UNITS[frequency]}` : `Every ${interval} ${frequencyUnit(frequency, interval)}`
+  const start = dayToDate(startDate)
+  switch (frequency) {
+    case 'daily':
+      return every
+    case 'weekly':
+      return `${every} on ${start.toLocaleDateString(undefined, { weekday: 'long' })}`
+    case 'monthly':
+      return `${every} on the ${ordinal(start.getDate())}`
+    case 'yearly':
+      return `${every} on ${start.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`
+  }
 }

@@ -37,8 +37,12 @@ beforeAll(async () => {
   vi.useFakeTimers({ toFake: ['Date'], now: at('2026-04-20') })
   ;({ prisma } = await import('../../src/db/client'))
   const { importFromChatDb } = await import('../../src/services/importer')
+  const { seedSchedules } = await import('../../src/db/schedules')
+  const { config } = await import('../../src/utils/config')
 
   await resetDatabase()
+  // As the first start would: config's recurringTransactions become schedules.
+  await seedSchedules(config.recurringTransactions)
   chatDb = buildChatDb(messages)
   summary = await importFromChatDb(chatDb.path)
 })

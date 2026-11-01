@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { ParseError, parser } from '../../src/services/ingest/parser'
+import { ParseError } from '../../src/services/ingest/parser'
+import { fixtureParser as parser } from '../fixtures/pattern-files'
 import {
   MAX_MINOR,
   decimalToMinor,

@@ -1,5 +1,5 @@
 {
-  "bankSenders": ["DemoBank"],
+  "bankSenders": ["Demo Bank"],
   "accounts": [
     { "id": "checking", "label": "Checking", "currency": "EGP" },
     { "id": "credit_card", "label": "Credit Card", "currency": "EGP" },

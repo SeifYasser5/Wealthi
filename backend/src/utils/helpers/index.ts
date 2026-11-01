@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express'
 import { MAC_EPOCH_OFFSET_MS } from '../constants'
+import type { Refusal } from '../types'
 
 export function macDateToJs(raw: unknown): Date {
   // better-sqlite3 returns oversized integers as BigInt when safeIntegers(true)
@@ -60,4 +61,16 @@ export function route(onError: string, handler: (req: Request, res: Response) =>
       res.status(500).json({ error: onError })
     }
   }
+}
+
+const REFUSAL_STATUS: Record<Refusal['refused'], number> = { invalid: 400, 'not found': 404, conflict: 409 }
+
+/** True when a db write answered with why it refused, rather than its result. */
+export function isRefusal(result: unknown): result is Refusal {
+  return typeof result === 'object' && result !== null && 'refused' in result
+}
+
+/** Answers a refused write with its status and message. */
+export function refuse(res: Response, refusal: Refusal): Response {
+  return res.status(REFUSAL_STATUS[refusal.refused]).json({ error: refusal.error })
 }

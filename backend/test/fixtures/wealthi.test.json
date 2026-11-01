@@ -1,7 +1,5 @@
 {
-  "bankSenders": [
-    "Test Bank"
-  ],
+  "bankSenders": ["Test Bank"],
   "accounts": [
     {
       "id": "checking",
@@ -32,10 +30,7 @@
   "merchantCategories": {
     "ACME GROCERS": "Groceries"
   },
-  "extraCategories": [
-    "Rent",
-    "Dining"
-  ],
+  "extraCategories": ["Rent", "Dining"],
   "transferRules": [
     {
       "id": "card-payment-out",

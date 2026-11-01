@@ -2,12 +2,7 @@ import express from 'express'
 import request from 'supertest'
 import { describe, expect, it } from 'vitest'
 import { isYearMonth, macDateToJs, monthRange, round2, route, toYearMonth } from '../../src/utils/helpers'
-import {
-  MERCHANT_CATEGORIES,
-  SPENDING_CATEGORIES,
-  isSpendingCategory,
-  resolveCategory,
-} from '../../src/utils/categories'
+import { resolveCategory } from '../../src/utils/categories'
 import { toMacDate } from '../fixtures/chat-db'
 
 describe('macDateToJs', () => {
@@ -65,20 +60,15 @@ describe('route', () => {
   })
 })
 
-describe('categories', () => {
-  it('resolves manual category, then merchant map, then Uncategorized', () => {
-    expect(resolveCategory('ACME GROCERS', 'Dining')).toBe('Dining')
-    expect(resolveCategory('ACME GROCERS', null)).toBe('Groceries')
-    expect(resolveCategory('ACME GROCERS', '')).toBe('Groceries')
-    expect(resolveCategory('acme grocers', null)).toBe('Uncategorized')
-    expect(resolveCategory(null, null)).toBe('Uncategorized')
-  })
+describe('resolveCategory', () => {
+  const merchants = new Map([['ACME GROCERS', 'Groceries']])
 
-  it('offers extra categories plus every mapped one, sorted and deduplicated', () => {
-    expect(MERCHANT_CATEGORIES).toEqual({ 'ACME GROCERS': 'Groceries' })
-    expect(SPENDING_CATEGORIES).toEqual(['Dining', 'Groceries', 'Rent'])
-    expect(isSpendingCategory('Rent')).toBe(true)
-    expect(isSpendingCategory('Uncategorized')).toBe(false)
+  it('resolves manual category, then merchant map, then Uncategorized', () => {
+    expect(resolveCategory('ACME GROCERS', 'Dining', merchants)).toBe('Dining')
+    expect(resolveCategory('ACME GROCERS', null, merchants)).toBe('Groceries')
+    expect(resolveCategory('ACME GROCERS', '', merchants)).toBe('Groceries')
+    expect(resolveCategory('acme grocers', null, merchants)).toBe('Uncategorized')
+    expect(resolveCategory(null, null, merchants)).toBe('Uncategorized')
   })
 })
 

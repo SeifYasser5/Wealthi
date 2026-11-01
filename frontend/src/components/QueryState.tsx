@@ -17,13 +17,13 @@ interface Props<T> {
  * build it from — which also narrows `data` to non-undefined for the caller.
  */
 export function QueryState<T>({ query, isEmpty, errorMessage, emptyMessage, children }: Props<T>) {
-  const panel = 'rounded-2xl bg-surface py-16 text-center text-muted'
+  const panel = 'rounded-3xl bg-surface py-20 text-center text-sm text-muted'
 
-  if (query.isLoading) return <div className={panel}>Loading…</div>
+  if (query.isLoading) return <div className={`${panel} animate-pulse`}>Loading…</div>
 
   if (query.isError) {
     return (
-      <div className="rounded-2xl bg-negative-soft py-16 text-center text-negative">
+      <div className="rounded-3xl bg-negative-soft py-20 text-center text-sm text-negative">
         {query.error instanceof Error ? query.error.message : errorMessage}
       </div>
     )

@@ -5,8 +5,13 @@ import healthRouter from './routes/health'
 import transactionsRouter from './routes/transactions'
 import balancesRouter from './routes/balances'
 import spendingRouter from './routes/spending'
+import insightsRouter from './routes/insights'
 import categoriesRouter from './routes/categories'
+import merchantCategoriesRouter from './routes/merchant-categories'
 import accountsRouter from './routes/accounts'
+import importRouter from './routes/import'
+import patternsRouter from './routes/patterns'
+import schedulesRouter from './routes/schedules'
 
 const app = express()
 
@@ -28,8 +33,13 @@ app.use('/api/health', healthRouter)
 app.use('/api/transactions', transactionsRouter)
 app.use('/api/balances', balancesRouter)
 app.use('/api/spending', spendingRouter)
+app.use('/api/insights', insightsRouter)
 app.use('/api/categories', categoriesRouter)
+app.use('/api/merchant-categories', merchantCategoriesRouter)
 app.use('/api/accounts', accountsRouter)
+app.use('/api/import', importRouter)
+app.use('/api/patterns', patternsRouter)
+app.use('/api/schedules', schedulesRouter)
 
 // The public demo serves the built frontend from this same origin (see
 // Dockerfile). In development Vite serves it instead and proxies /api here.

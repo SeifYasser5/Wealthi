@@ -45,7 +45,11 @@ const ManualEntry = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'must be "YYYY-MM-DD"'),
 })
 
-/** A manual entry repeated monthly from startYearMonth through the current month. */
+/**
+ * Seed only: a manual entry repeated monthly from startYearMonth. Read once,
+ * into the schedules table, by the first start that finds no schedule stored
+ * (db/schedules.ts). The Schedules page edits them from then on.
+ */
 const RecurringEntry = ManualEntry.omit({ date: true }).extend({
   /** "YYYY-MM", inclusive */
   startYearMonth: YearMonth,
@@ -148,12 +152,18 @@ export const WealthiConfigSchema = z
     accountSources: z.record(z.string(), AccountRef),
     /** Genesis balances, used for the first month with no earlier snapshot */
     openingBalances: z.record(AccountRef, z.number().transform(toMinor)),
-    /** Merchant name as printed by the bank → category label */
-    merchantCategories: z.record(z.string(), z.string()),
-    /** Categories offered by the UI that no merchant maps to yet */
-    extraCategories: z.array(z.string()),
+    /**
+     * Seed only: merchant name as printed by the bank → category name. Read
+     * once, into the categories and merchant_categories tables, by the first
+     * start that finds no categories stored (db/categories.ts). The Categories
+     * page edits them from then on.
+     */
+    merchantCategories: z.record(z.string(), z.string().trim().min(1)).default({}),
+    /** Seed only, like merchantCategories: categories no merchant maps to */
+    extraCategories: z.array(z.string().trim().min(1)).default([]),
     transferRules: z.array(TransferRule),
-    recurringTransactions: z.array(RecurringEntry),
+    /** Seed only, like merchantCategories: see RecurringEntry */
+    recurringTransactions: z.array(RecurringEntry).default([]),
     manualTransactions: z.array(ManualEntry),
     /** Optional; defaults to none */
     csvImports: z.array(CsvImport).default([]),
@@ -212,7 +222,8 @@ export type DroppedRef = {
  * - `transferRules` — a transfer is a tag, not a type, so the leg still lands
  *   as a plain debit/credit and balances are unaffected. Only the tag is lost.
  * - `manualTransactions` / `recurringTransactions` — these are real rows in
- *   `transactions` *and* in the balance math. Dropping them changes balances.
+ *   `transactions` *and* in the balance math (recurring ones once seeded as
+ *   schedules). Dropping them changes balances.
  * - `csvImports` — an unknown `account` leaves the rows nowhere to land, so the
  *   whole import goes (changing balances). An unknown `counterAccount` is only
  *   the transfer tag, so the rows are kept and the tag cleared.

@@ -1,10 +1,6 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { compile, type Pattern, type PatternFile } from './pattern'
-import type { LearnedPattern } from './learn'
-
-/** config/patterns/<bank>.json — gitignored, next to config/wealthi.json. WEALTHI_PATTERNS_DIR overrides it (tests). */
-export const PATTERNS_DIR = resolve(process.env.WEALTHI_PATTERNS_DIR ?? resolve(__dirname, '../../../config/patterns'))
+import { compile, type PatternFile } from './pattern'
 
 /** "ADCB Egypt" → "adcb-egypt" */
 export function bankOf(sender: string): string {
@@ -15,8 +11,12 @@ export function bankOf(sender: string): string {
     .replace(/^-|-$/g, '')
 }
 
-/** Every pattern file, validated: each pattern must compile. */
-export function loadPatternFiles(dir = PATTERNS_DIR): PatternFile[] {
+/**
+ * Every pattern file in `dir`, validated: each pattern must compile. Only the
+ * committed seed files are read this way (backend/demo/patterns, the test
+ * fixtures); the app's own patterns live in the sms_patterns table.
+ */
+export function loadPatternFiles(dir: string): PatternFile[] {
   if (!existsSync(dir)) return []
   return readdirSync(dir)
     .filter((name) => name.endsWith('.json'))
@@ -33,60 +33,4 @@ export function loadPatternFiles(dir = PATTERNS_DIR): PatternFile[] {
       }
       return file
     })
-}
-
-export function savePatternFile(file: PatternFile, dir = PATTERNS_DIR): string {
-  mkdirSync(dir, { recursive: true })
-  const path = resolve(dir, `${file.bank}.json`)
-  writeFileSync(path, JSON.stringify(file, null, 2) + '\n')
-  return path
-}
-
-export interface MergeResult {
-  file: PatternFile
-  added: number
-  missing: number
-}
-
-/**
- * Merges a learn run into the existing file without losing your work:
- * - a pattern you already have keeps `enabled`, `type` and `pattern`;
- *   only `generated`, `reason`, `review` and `messages` are refreshed, so
- *   `pattern` vs `generated` shows what learn would produce today. Delete a
- *   pattern from the file to take the fresh version.
- * - a new pattern is added disabled.
- * - a pattern this run didn't produce is kept and marked `missing`.
- * Order: by message count; missing ones last.
- */
-export function mergePatterns(
-  existing: PatternFile | undefined,
-  bank: string,
-  senders: string[],
-  learned: LearnedPattern[],
-): MergeResult {
-  const previous = new Map((existing?.patterns ?? []).map((p) => [p.id, p]))
-  let added = 0
-
-  const current: Pattern[] = learned.map((l) => {
-    const old = previous.get(l.id)
-    previous.delete(l.id)
-    if (!old) added++
-    return {
-      id: l.id,
-      enabled: old?.enabled ?? false,
-      type: old?.type ?? l.type,
-      pattern: old?.pattern ?? l.pattern,
-      generated: l.pattern,
-      reason: l.reason,
-      ...(l.review ? { review: l.review } : {}),
-      messages: l.messages,
-    }
-  })
-  const missing = [...previous.values()].map((p) => ({ ...p, messages: 0, missing: true as const }))
-
-  const patterns = [...current, ...missing].sort(
-    (a, b) => Number(!!a.missing) - Number(!!b.missing) || b.messages - a.messages,
-  )
-  const allSenders = [...new Set([...(existing?.senders ?? []), ...senders])]
-  return { file: { bank, senders: allSenders, patterns }, added, missing: missing.length }
 }

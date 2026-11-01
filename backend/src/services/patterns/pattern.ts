@@ -1,10 +1,15 @@
 import { VALUE_PATTERNS, asciiDigits, escape, type SlotType } from './mask'
 
 /**
- * Pattern files — config/patterns/<bank>.json, written by `npm run patterns:learn`
- * and read by the pattern parser. They hold transaction patterns only; SMS that
- * match none (OTPs, declines, promos) are not transactions. Gitignored: patterns
- * are mined from your own messages and can carry literal text from them.
+ * Learned patterns — stored in the sms_patterns table by a learn run (Learn page,
+ * POST /api/patterns/learn) and read by the pattern parser at each import. They
+ * hold transaction patterns only; SMS that match none (OTPs, declines, promos)
+ * are not transactions. They are mined from your own messages and can carry
+ * literal text from them.
+ *
+ * Pattern files (`<bank>.json`, a PatternFile) are the same patterns as committed,
+ * synthetic seed data: backend/demo/patterns for the demo, test/fixtures/patterns
+ * for the tests, loaded into the table by replacePatterns().
  *
  * A pattern is a template written as editable text: literal tokens and
  * `{role:TYPE}` slots separated by spaces, e.g.
@@ -38,7 +43,7 @@ export type Role = (typeof ROLES)[number]
 export interface Pattern {
   /** "<bank>:<hash of the mined template>" — stable across learn runs */
   id: string
-  /** Only enabled patterns are used by the parser. Learn adds new patterns disabled and never changes this. */
+  /** Only enabled patterns are used by the parser (status "enabled" in the table). */
   enabled: boolean
   /** debit/credit, or by-keyword when the direction word sits in a {direction:TEXT} slot */
   type: 'debit' | 'credit' | 'by-keyword'
@@ -55,10 +60,9 @@ export interface Pattern {
   missing?: true
 }
 
+/** One bank's patterns. A message belongs to the bank bankOf(its sender) names. */
 export interface PatternFile {
   bank: string
-  /** chat.db handle ids this bank sends from */
-  senders: string[]
   patterns: Pattern[]
 }
 

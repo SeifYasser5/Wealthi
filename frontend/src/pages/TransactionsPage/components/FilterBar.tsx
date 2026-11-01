@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Search, X } from 'lucide-react'
 import { useAccounts } from '../../../hooks/useAccounts'
 import { Select } from '../../../components/Select'
+import { SegmentedControl } from '../../../components/SegmentedControl'
 import type { AccountId, TransactionType, TransferFilter } from '@wealthi/shared'
 
 interface Props {
@@ -14,7 +16,23 @@ interface Props {
   onTypeChange: (type: TransactionType | '') => void
   onTransferChange: (transfer: TransferFilter | '') => void
   onCounterAccountChange: (counterAccount: AccountId | '') => void
+  /** Drops every filter but the month. */
+  onClear: () => void
+  /** Shown at the end of the bar, e.g. the result count. */
+  summary?: ReactNode
 }
+
+const TYPES = [
+  { value: '', label: 'All' },
+  { value: 'debit', label: 'Money out' },
+  { value: 'credit', label: 'Money in' },
+] as const
+
+const TRANSFERS = [
+  { value: '', label: 'All' },
+  { value: 'only', label: 'Transfers' },
+  { value: 'exclude', label: 'No transfers' },
+] as const
 
 export function FilterBar({
   account,
@@ -27,6 +45,8 @@ export function FilterBar({
   onTypeChange,
   onTransferChange,
   onCounterAccountChange,
+  onClear,
+  summary,
 }: Props) {
   const { accounts } = useAccounts()
   const [text, setText] = useState(merchant)
@@ -50,10 +70,22 @@ export function FilterBar({
   // Excluding transfers leaves no counter account to pick, so the select is
   // locked rather than allowed to build a query that can't match anything.
   const counterDisabled = transfer === 'exclude'
+  const filtered = Boolean(account || merchant || text || type || transfer || counterAccount)
 
   return (
-    <div className="flex flex-wrap items-center justify-center gap-3">
-      <Select value={account} onChange={(v) => onAccountChange(v as AccountId | '')}>
+    <div className="flex flex-wrap items-center gap-2 rounded-3xl bg-surface p-3">
+      <label className="relative flex w-52 items-center">
+        <Search size={16} aria-hidden className="pointer-events-none absolute left-3.5 text-muted" />
+        <input
+          type="search"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Search merchant…"
+          className="h-9 w-full rounded-full bg-surface-raised pr-4 pl-10 text-sm text-foreground placeholder-muted transition-colors focus:bg-surface-hover focus:outline-2 focus:outline-primary"
+        />
+      </label>
+
+      <Select value={account} onChange={(v) => onAccountChange(v as AccountId | '')} label="Account">
         <option value="">All accounts</option>
         {accounts.map((a) => (
           <option key={a.id} value={a.id}>
@@ -62,23 +94,12 @@ export function FilterBar({
         ))}
       </Select>
 
-      <Select value={type} onChange={(v) => onTypeChange(v as TransactionType | '')}>
-        <option value="">Debits &amp; credits</option>
-        <option value="debit">Debits only</option>
-        <option value="credit">Credits only</option>
-      </Select>
-
-      <Select value={transfer} onChange={(v) => onTransferChange(v as TransferFilter | '')}>
-        <option value="">Transfers &amp; spending</option>
-        <option value="only">Transfers only</option>
-        <option value="exclude">Exclude transfers</option>
-      </Select>
-
       <Select
         value={counterAccount}
         onChange={(v) => onCounterAccountChange(v as AccountId | '')}
         disabled={counterDisabled}
         title={counterDisabled ? 'Not available while transfers are excluded' : undefined}
+        label="Counter account"
       >
         <option value="">Any counter account</option>
         {accounts.map((a) => (
@@ -88,13 +109,24 @@ export function FilterBar({
         ))}
       </Select>
 
-      <input
-        type="search"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder="Search merchant…"
-        className="h-10 w-64 rounded-xl bg-surface px-3 text-sm text-foreground border border-line placeholder-muted focus:border-primary focus:outline-none"
-      />
+      <SegmentedControl label="Direction" value={type} options={TYPES} onChange={onTypeChange} />
+      <SegmentedControl label="Transfers" value={transfer} options={TRANSFERS} onChange={onTransferChange} />
+      <div className="ml-auto flex items-center gap-3 pl-2">
+        {filtered && (
+          <button
+            type="button"
+            onClick={() => {
+              setText('')
+              onClear()
+            }}
+            className="inline-flex h-8 items-center gap-1 rounded-full px-3 text-sm font-medium text-primary transition-colors hover:bg-primary-soft focus-visible:outline-2 focus-visible:outline-primary"
+          >
+            <X size={14} aria-hidden />
+            Clear
+          </button>
+        )}
+        {summary}
+      </div>
     </div>
   )
 }

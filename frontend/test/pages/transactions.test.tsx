@@ -20,20 +20,23 @@ async function ledgerRows() {
 }
 
 const selects = () => screen.getAllByRole('combobox') as HTMLSelectElement[]
-const [ACCOUNT, TYPE, TRANSFER, COUNTER] = [0, 1, 2, 3]
+const [ACCOUNT, COUNTER] = [0, 1]
+/** One option of the Direction or Transfers segmented control. */
+const segment = (group: 'Direction' | 'Transfers', name: string) =>
+  within(screen.getByRole('radiogroup', { name: group })).getByRole('radio', { name })
 
 afterEach(() => vi.useRealTimers())
 
 describe('Transactions page', () => {
   it('lists the month newest first with labels, badges and derived balances', async () => {
     renderApp(JAN)
-    expect(await screen.findByText('4 transactions', { selector: 'span' })).toBeInTheDocument()
+    expect(await screen.findByLabelText('4 transactions')).toBeInTheDocument()
     expect(await ledgerRows()).toEqual([
       // computed 6000 − 250 = 5750 matches the reported 5750 → discrepancy 0
       ['Jan 20, 2026', 'Checking', 'CARD PAYMENT↔ Credit Card', 'debit', '250', '5,750', '5,750', '0'],
       ['Jan 15, 2026', 'Checking', 'EMPLOYER LTD', 'credit', '5,000', '6,000', '—', '—'],
       ['Jan 10, 2026', 'Credit Card', 'ACME GROCERS', 'debit', '250', '4,750', '—', '—'],
-      ['Jan 05, 2026', 'Savings (USD)', '—', 'credit', '20', '—', '—', '—'],
+      ['Jan 05, 2026', 'Savings (USD)', '—Scheduled', 'credit', '20', '—', '—', '—'],
     ])
   })
 
@@ -109,10 +112,10 @@ describe('Transactions page', () => {
 
   it('filters by account and direction through the URL and the request', async () => {
     const { user } = renderApp(JAN)
-    await screen.findByText('4 transactions', { selector: 'span' })
+    await screen.findByLabelText('4 transactions')
     await user.selectOptions(selects()[ACCOUNT], 'checking')
-    await user.selectOptions(selects()[TYPE], 'credit')
-    expect(await screen.findByText('1 transaction', { selector: 'span' })).toBeInTheDocument()
+    await user.click(segment('Direction', 'Money in'))
+    expect(await screen.findByLabelText('1 transaction')).toBeInTheDocument()
     expect(currentUrl().search).toBe('?yearMonth=2026-01&account=checking&type=credit')
     const last = api.queries('/api/transactions').at(-1)!
     expect([last.get('account'), last.get('type')]).toEqual(['checking', 'credit'])
@@ -123,21 +126,21 @@ describe('Transactions page', () => {
 
   it('picking a counter account switches to transfers only', async () => {
     const { user } = renderApp(JAN)
-    await screen.findByText('4 transactions', { selector: 'span' })
+    await screen.findByLabelText('4 transactions')
     await user.selectOptions(selects()[COUNTER], 'card')
-    expect(await screen.findByText('1 transaction', { selector: 'span' })).toBeInTheDocument()
-    expect(selects()[TRANSFER]).toHaveValue('only')
+    expect(await screen.findByLabelText('1 transaction')).toBeInTheDocument()
+    expect(segment('Transfers', 'Transfers')).toBeChecked()
     expect(currentUrl().search).toBe('?yearMonth=2026-01&counterAccount=card&transfer=only')
 
     await user.selectOptions(selects()[COUNTER], '')
-    expect(selects()[TRANSFER]).toHaveValue('only') // clearing the counter account leaves the transfer filter
+    expect(segment('Transfers', 'Transfers')).toBeChecked() // clearing the counter account leaves the transfer filter
   })
 
   it('excluding transfers drops and locks the counter account', async () => {
     const { user } = renderApp(`${JAN}&transfer=only&counterAccount=card`)
-    await screen.findByText('1 transaction', { selector: 'span' })
-    await user.selectOptions(selects()[TRANSFER], 'exclude')
-    expect(await screen.findByText('3 transactions', { selector: 'span' })).toBeInTheDocument()
+    await screen.findByLabelText('1 transaction')
+    await user.click(segment('Transfers', 'No transfers'))
+    expect(await screen.findByLabelText('3 transactions')).toBeInTheDocument()
     expect(selects()[COUNTER]).toBeDisabled()
     expect(selects()[COUNTER]).toHaveAttribute('title', 'Not available while transfers are excluded')
     expect(currentUrl().searchParams.has('counterAccount')).toBe(false)
@@ -145,13 +148,13 @@ describe('Transactions page', () => {
 
   it('searches merchants after a pause in typing, not per keystroke', async () => {
     const { user } = renderApp(JAN)
-    await screen.findByText('4 transactions', { selector: 'span' })
+    await screen.findByLabelText('4 transactions')
     const before = api.queries('/api/transactions').length
     await user.type(screen.getByPlaceholderText('Search merchant…'), 'acme')
     expect(currentUrl().searchParams.has('merchant')).toBe(false)
     // Debounced by 300 ms; the generous timeout keeps this steady on a loaded machine.
     await waitFor(() => expect(currentUrl().searchParams.get('merchant')).toBe('acme'), { timeout: 3000 })
-    expect(await screen.findByText('1 transaction', { selector: 'span' })).toBeInTheDocument()
+    expect(await screen.findByLabelText('1 transaction')).toBeInTheDocument()
     const merchantQueries = api
       .queries('/api/transactions')
       .slice(before)
@@ -164,18 +167,18 @@ describe('Transactions page', () => {
 
   it('ignores filter values it does not recognise', async () => {
     renderApp(`${JAN}&type=transfer&transfer=maybe&yearMonth=bogus&account=nope&counterAccount=nope`)
-    await screen.findByText(/transactions?$/, { selector: 'span' })
+    await screen.findByLabelText(/transactions?$/)
     await waitFor(() => {
       const q = api.queries('/api/transactions').at(-1)!
       expect([...q.keys()]).toEqual(['yearMonth'])
     })
-    expect(selects()[TYPE]).toHaveValue('')
-    expect(selects()[TRANSFER]).toHaveValue('')
+    expect(segment('Direction', 'All')).toBeChecked()
+    expect(segment('Transfers', 'All')).toBeChecked()
   })
 
   it('reads a hand-edited counterAccount + transfer=exclude URL as the exclusion', async () => {
     renderApp(`${JAN}&transfer=exclude&counterAccount=card`)
-    expect(await screen.findByText('3 transactions', { selector: 'span' })).toBeInTheDocument()
+    expect(await screen.findByLabelText('3 transactions')).toBeInTheDocument()
     expect(api.queries('/api/transactions').at(-1)!.has('counterAccount')).toBe(false)
   })
 
@@ -192,25 +195,48 @@ describe('Transactions page', () => {
     expect(await screen.findByText('card')).toBeInTheDocument()
   })
 
-  it('shows "Updating…" while a refetch runs over data already on screen', async () => {
+  it('shows a spinner in place of the count while a refetch runs over data already on screen', async () => {
     const { user } = renderApp(JAN)
-    await screen.findByText('4 transactions', { selector: 'span' })
+    expect(await screen.findByLabelText('4 transactions')).not.toHaveClass('invisible')
+    expect(screen.queryByRole('status', { name: 'Updating' })).not.toBeInTheDocument()
     server.use(
       http.get('*/api/transactions', async () => {
         await delay('infinite')
         return HttpResponse.json({})
       }),
     )
-    await user.selectOptions(selects()[TYPE], 'debit')
-    expect(await screen.findByText('Updating…')).toBeInTheDocument()
-    expect(screen.getByText('4 transactions', { selector: 'span' })).toBeInTheDocument() // previous rows stay visible
+    await user.click(segment('Direction', 'Money out'))
+    expect(await screen.findByRole('status', { name: 'Updating' })).toBeInTheDocument()
+    // The stale count keeps its cell, hidden, so the bar doesn't change width.
+    expect(screen.getByLabelText('4 transactions')).toHaveClass('invisible')
+    expect(screen.getAllByRole('row')).toHaveLength(6) // header, total and the previous 4 rows stay visible
+  })
+
+  it('highlights a narrowed account filter and goes back to both directions', async () => {
+    const { user } = renderApp(`${JAN}&account=checking&type=credit`)
+    expect(await screen.findByLabelText('1 transaction')).toBeInTheDocument()
+    expect(selects()[ACCOUNT]).toHaveClass('text-primary')
+    expect(selects()[COUNTER]).not.toHaveClass('text-primary')
+    await user.click(segment('Direction', 'All'))
+    expect(await screen.findByLabelText('2 transactions')).toBeInTheDocument()
+    expect(currentUrl().searchParams.has('type')).toBe(false)
+  })
+
+  it('clears every filter but the month, and hides Clear when nothing is filtered', async () => {
+    const { user } = renderApp(`${JAN}&account=checking&type=credit&merchant=employer`)
+    expect(await screen.findByLabelText('1 transaction')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Clear' }))
+    expect(currentUrl().search).toBe('?yearMonth=2026-01')
+    expect(screen.getByPlaceholderText('Search merchant…')).toHaveValue('')
+    expect(await screen.findByLabelText('4 transactions')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Clear' })).not.toBeInTheDocument()
   })
 
   it('filters to transfers only without touching the counter account', async () => {
     const { user } = renderApp(JAN)
-    await screen.findByText('4 transactions', { selector: 'span' })
-    await user.selectOptions(selects()[TRANSFER], 'only')
-    expect(await screen.findByText('1 transaction', { selector: 'span' })).toBeInTheDocument()
+    await screen.findByLabelText('4 transactions')
+    await user.click(segment('Transfers', 'Transfers'))
+    expect(await screen.findByLabelText('1 transaction')).toBeInTheDocument()
     expect(currentUrl().search).toBe('?yearMonth=2026-01&transfer=only')
     expect(selects()[COUNTER]).toBeEnabled()
   })

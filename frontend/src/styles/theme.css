@@ -9,39 +9,62 @@
  *
  * Tints are tokens too: use `bg-primary-soft`, never `bg-primary/10`, so every
  * light variant of a color is the same shade everywhere it appears. Every
- * `-soft` tint is its base color at 10% over the background.
+ * `-soft` tint is its base color at 16% over the background.
+ *
+ * The palette is dark: Apple's system colors for dark appearance, on a
+ * near-black page with lifted grey surfaces.
  */
 @theme {
   --color-*: initial;
 
   /* Base */
-  --color-background: #ffffff;
-  --color-foreground: #000000;
+  --color-background: #0a0a0b;
+  --color-foreground: #f5f5f7;
 
   /* Primary — links, focus rings, active states, highlights. Its tints are
      derived, so changing --color-primary recolors them too. */
-  --color-primary: #0666eb;
-  --color-primary-soft: color-mix(in srgb, var(--color-primary) 10%, var(--color-background));
-  --color-primary-line: color-mix(in srgb, var(--color-primary) 17%, var(--color-background));
+  --color-primary: #0a84ff;
+  --color-primary-soft: color-mix(in srgb, var(--color-primary) 16%, var(--color-background));
+  --color-primary-line: color-mix(in srgb, var(--color-primary) 32%, var(--color-background));
+  /* Text and icons on a solid primary fill. */
+  --color-on-primary: #ffffff;
 
   /* Status — credits and matches, debits and errors, discrepancies and large items */
-  --color-positive: #00d54b;
-  --color-positive-soft: color-mix(in srgb, var(--color-positive) 10%, var(--color-background));
-  --color-negative: #ff3b30;
-  --color-negative-soft: color-mix(in srgb, var(--color-negative) 10%, var(--color-background));
-  --color-warning: #ff9500;
-  --color-warning-soft: color-mix(in srgb, var(--color-warning) 10%, var(--color-background));
+  --color-positive: #30d158;
+  --color-positive-soft: color-mix(in srgb, var(--color-positive) 16%, var(--color-background));
+  --color-negative: #ff453a;
+  --color-negative-soft: color-mix(in srgb, var(--color-negative) 16%, var(--color-background));
+  --color-warning: #ff9f0a;
+  --color-warning-soft: color-mix(in srgb, var(--color-warning) 16%, var(--color-background));
 
   /* Neutrals */
-  --color-subtle: #6b6d80; /* secondary text */
-  --color-muted: #9a9ba8; /* tertiary text, placeholders, empty states */
-  --color-line: #dde0e6; /* dividers, borders, input outlines, bar tracks */
-  --color-surface: #f4f5f7; /* cards, panels, inputs */
-  --color-surface-hover: #e9eaed;
+  --color-subtle: #a1a1a6; /* secondary text */
+  --color-muted: #6e6e73; /* tertiary text, placeholders, empty states */
+  --color-line: #2c2c2e; /* dividers, borders, input outlines, bar tracks */
+  --color-surface: #161618; /* cards, panels */
+  --color-surface-raised: #232326; /* controls and items inside a card */
+  --color-surface-hover: #2e2e32;
+
+  /* Charts — categorical series, assigned in this fixed order and never cycled:
+     a ninth series folds into "Other", which takes the neutral. The order is
+     the colorblind-safety mechanism: every adjacent pair clears ΔE 8 under
+     protan/deutan/tritan simulation and every slot clears 3:1 on the surface. */
+  --color-chart-1: #3987e5; /* blue */
+  --color-chart-2: #d95926; /* orange */
+  --color-chart-3: #199e70; /* aqua */
+  --color-chart-4: #c98500; /* yellow */
+  --color-chart-5: #d55181; /* magenta */
+  --color-chart-6: #008300; /* green */
+  --color-chart-7: #9085e9; /* violet */
+  --color-chart-8: #e66767; /* red */
+  --color-chart-other: #6e6e73;
 
   /* Scrim behind a modal — the page dimmed, never a hardcoded rgba. */
-  --color-overlay: color-mix(in srgb, var(--color-foreground) 45%, transparent);
+  --color-overlay: color-mix(in srgb, var(--color-background) 70%, transparent);
+  /* The sticky nav bar: the page shows through, blurred. */
+  --color-glass: color-mix(in srgb, var(--color-background) 72%, transparent);
 
-  /* Typography */
-  --font-sans: 'Figtree', ui-sans-serif, system-ui, sans-serif;
+  /* Typography — San Francisco on Apple devices, Inter everywhere else. */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'SF Mono', ui-monospace, Menlo, monospace;
 }

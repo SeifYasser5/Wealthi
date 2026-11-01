@@ -3,7 +3,7 @@
 > Living doc for humans and AI assistants. It explains the algorithm and the reasons behind it, not every
 > line of code. **Update it in the same change** whenever you alter behaviour in
 > `backend/src/services/patterns/*`, `services/ingest/decode.ts`, `services/ingest/parser.ts`,
-> `services/learn-patterns.ts`, the pattern file format or the importer wiring. Add a line to the changelog at the bottom.
+> `services/learn-patterns.ts`, `db/patterns.ts`, the pattern storage or the importer wiring. Add a line to the changelog at the bottom.
 > Short version: [PATTERNS.md](PATTERNS.md). Examples here are synthetic; never paste real SMS.
 
 ## 1. The problem
@@ -22,7 +22,7 @@ Some values have a recognisable shape (amounts, dates, card numbers). Free text 
 1. mask what has a shape,
 2. line messages up so the free text shows itself as the part that differs,
 3. decide what each slot means,
-4. save the result as an editable pattern that compiles to a regex.
+4. store the result as a readable pattern that compiles to a regex, for a human to approve.
 
 Everything expensive and heuristic (steps 1–3) happens once, at **learn** time, and is reviewed by
 a human. The **import** only runs the approved patterns, so parsing is deterministic.
@@ -38,10 +38,12 @@ a human. The **import** only runs the approved patterns, so parsing is determini
 | `services/patterns/label.ts` | transaction filter, direction, slot roles |
 | `services/patterns/learn.ts` | mask → mine → label for one bank; stable ids |
 | `services/patterns/pattern.ts` | pattern types, `{role:TYPE}` compiler, `extract()`, direction words |
-| `services/patterns/store.ts` | read/validate/write pattern files, merge with existing, `bankOf()` |
+| `services/patterns/store.ts` | `bankOf()`; read/validate the committed seed pattern files |
+| `db/patterns.ts` | the `sms_patterns` table: store a learn run, list, set status, enabled rows for the parser, seed |
 | `services/ingest/parser.ts` | `DecodedMessage` → transaction / skipped / `ParseError` |
-| `services/learn-patterns.ts` | CLI: read chat.db, learn every bank, merge, save, print summary |
-| `services/importer.ts` | uses `decode` + `parser` (built by `createPatternParser` in `ingest/parser.ts`); runs on server start |
+| `services/learn-patterns.ts` | `learnFromChatDb()`: read chat.db, learn every bank, store (§8.2) |
+| `services/run-learn.ts` | `POST /api/patterns/learn`: one run at a time, its report; demo mode learns from the demo ledger |
+| `services/importer.ts` | uses `decode` + a parser built per run by `createPatternParser(await loadEnabledPatterns())`; runs on `POST /api/import` |
 
 ## 3. Decoding (`services/ingest/decode.ts`)
 
@@ -62,9 +64,9 @@ Pattern matching needs clean text because patterns match the **whole** message (
 
 ## 4. Bank identity
 
-`bankOf(sender)` slugifies the chat.db handle: `"ADCB Egypt"` → `adcb-egypt`. The slug is the file
-name and the prefix of pattern ids and account keys. A pattern file lists its `senders`; the parser
-chooses the file by exact sender match. Only senders in `bankSenders` (wealthi.json) are read.
+`bankOf(sender)` slugifies the chat.db handle: `"ADCB Egypt"` → `adcb-egypt`. The slug is a pattern's
+`bank` and the prefix of pattern ids and account keys. Learn and the parser both group by it, so handles
+that slug the same share one set of patterns. Only senders in `bankSenders` (wealthi.json) are read.
 
 ## 5. Masking (`mask.ts`)
 
@@ -242,15 +244,38 @@ Added to `review` for a human to check:
 - `seen once`
 - `unlabelled TEXT slot #k`: matched but unused. Usually harmless.
 
-## 8. Pattern files
+## 8. Pattern storage
 
-`backend/config/patterns/<bank>.json` (gitignored). `WEALTHI_PATTERNS_DIR` points `PATTERNS_DIR`
-at another directory; the test suite uses it to load `backend/test/fixtures/patterns/`.
+Learned patterns live in the `sms_patterns` table (`prisma/schema.prisma`, `db/patterns.ts`), one row
+per pattern. Its columns are the `Pattern` fields plus `bank`, a `status` instead of `enabled`, and
+`learnedAt`:
+
+| Column | Owner | Meaning |
+|---|---|---|
+| `id` | learn | `<bank>:<first 10 hex of sha1(mined template tokens)>`; `-2`, `-3` on collision |
+| `bank` | learn | `bankOf(sender)` of the messages it was learned from |
+| `status` | **you** | `pending` (new, waiting for review), `enabled` or `disabled`; only `enabled` parses. Learn writes `pending` and never changes it |
+| `type`, `pattern` | learn, once | written when the pattern is first stored, then kept; what the parser uses |
+| `generated` | learn | what learn produces today; differs from `pattern` once the labeller or masking changes |
+| `reason`, `review`, `messages` | learn | refreshed every run |
+| `missing` | learn | set when a run of its bank no longer produces this id; the row is kept |
+| `learnedAt` | learn | when the run that first found it ran |
+
+The Learn page (`frontend/src/pages/LearnPage/`) drives it: **Learn patterns** (`POST /api/patterns/learn`
+→ `run-learn.ts` → `learnFromChatDb()`), a review of the `pending` rows, and Enabled / Disabled tabs with a
+toggle (`PATCH /api/patterns` `{ enable, disable }`, all or nothing: an unknown id changes nothing). A
+review sends every pending id it showed: the ticked ones to `enable`, the rest to `disable`. Pattern text
+is not editable from the page. The table starts empty; nothing migrates from the pattern files earlier
+versions wrote to `backend/config/patterns/`.
+
+**Seed files.** The same patterns as committed JSON (`PatternFile`, read by `loadPatternFiles(dir)` in
+`store.ts`), for synthetic data only: `backend/demo/patterns/` (loaded by `seedDemo()`) and
+`backend/test/fixtures/patterns/` (loaded by `test/setup/reset.ts` and the e2e seed). `replacePatterns()`
+swaps the whole table for them, `enabled: true` → `enabled`, anything else → `disabled`:
 
 ```json
 {
   "bank": "example-bank",
-  "senders": ["Example Bank"],
   "patterns": [
     {
       "id": "example-bank:3f2a9c1b0d",
@@ -266,16 +291,6 @@ at another directory; the test suite uses it to load `backend/test/fixtures/patt
 }
 ```
 
-| Field | Owner | Meaning |
-|---|---|---|
-| `id` | learn | `<bank>:<first 10 hex of sha1(mined template tokens)>`; `-2`, `-3` on collision |
-| `enabled` | **you** | only enabled patterns parse; learn writes `false` and never changes it |
-| `type` | you (initially learn) | `debit`, `credit`, or `by-keyword` |
-| `pattern` | you (initially learn) | what the parser uses |
-| `generated` | learn | what learn produces today; differs from `pattern` if you edited it |
-| `reason`, `review`, `messages` | learn | refreshed every run |
-| `missing` | learn | set when a run no longer produces this id; the entry is kept |
-
 ### 8.1 Pattern syntax
 
 - Tokens are separated by spaces. A token is either a literal or a slot `{role:TYPE}`.
@@ -286,29 +301,34 @@ at another directory; the test suite uses it to load `backend/test/fixtures/patt
   (`TEXT` = lazy `.*?`); tokens are joined with `\s*`; the whole thing is anchored with
   `^\s* … \s*$`, flags `su`. Because of `\s*`, `bal . {:CUR}` matches `bal.EGP`, and non-breaking
   spaces and newlines are fine. Merchants are captured from the original text, so spacing is kept exactly.
-- **Editing tips:** to include a fixed prefix in the merchant, move the slot left
-  (`- {merchant:TEXT} ref` instead of `- IPN payment {merchant:TEXT} ref`). To stop using a value,
-  clear its role (`{:NUM}`). Keep enough literal words that the pattern can't match other templates.
+- **Editing tips** (seed files only; the app's patterns aren't editable): to include a fixed prefix in the
+  merchant, move the slot left (`- {merchant:TEXT} ref` instead of `- IPN payment {merchant:TEXT} ref`). To
+  stop using a value, clear its role (`{:NUM}`). Keep enough literal words that the pattern can't match
+  other templates.
 
-### 8.2 Merge on re-learn (`store.ts`)
+### 8.2 Re-learn (`storeLearned()` in `db/patterns.ts`)
 
-- Existing id → keep `enabled`, `type`, `pattern`; refresh `generated`, `reason`, `review`, `messages`.
-  To take a fresh version, delete the entry and re-learn.
-- New id → added with `enabled: false`.
-- Id no longer produced → kept with `missing: true`, `messages: 0`.
-- Sorted by message count, missing entries last. `senders` are unioned.
-- Re-running learn on unchanged data produces byte-identical files (messages are read in `date, ROWID` order,
-  so equal timestamps can't reorder sequences between runs).
+One transaction per run, bank by bank:
+
+- Stored id → keep `status`, `type`, `pattern`; refresh `generated`, `reason`, `review`, `messages`, clear
+  `missing`. A reviewed pattern is never offered as new again, whichever way it was reviewed.
+- New id → added `pending`; the run's `added` counts these. The Learn page says *Nothing new found*
+  when it is 0 (and how many pending rows an earlier run left, if any).
+- A stored id of that bank the run didn't produce → `missing: true`, `messages: 0`, status kept.
+- Banks the run didn't read are left alone. Rows are listed by `missing`, then message count.
+- Learning is one run at a time (`run-learn.ts`): a second request joins the first instead of racing it
+  to insert the same ids.
 
 A template's id changes when its mined tokens change (e.g. new data adds a slot, or masking or
-tokenizing rules change). The old entry then becomes `missing` and the new one is disabled, so it
-needs to be re-approved and any edits copied over.
+tokenizing rules change). The old row then becomes `missing` and the new one is `pending`, so it
+needs to be reviewed again.
 
 ## 9. Parsing at import (`pattern.ts` `extract` + `parser.ts`)
 
 For each decoded message:
 
-1. Find the pattern file by sender, or fail with `no pattern file for sender`.
+1. Find the enabled patterns of `bankOf(sender)`, or fail with `no enabled patterns for sender`. The importer
+   builds the parser from the enabled rows (`loadEnabledPatterns()`) at the start of every run.
 2. Run every **enabled** pattern. If several match, the one with the **most literal tokens** wins
    (more specific). None → `no enabled pattern matched`.
 3. Read values by role. `extract()` returns the amount and balance as raw text (ASCII digits);
@@ -390,7 +410,7 @@ When you change…
 - **mask rules or tokenization** → update §5, expect id churn (§8.2), re-learn and re-approve.
 - **mining thresholds or logic** → update §6 and §10.
 - **labelling words or role rules** → update §7; add a synthetic test for the new wording.
-- **pattern syntax or fields** → update §8, `PATTERNS.md`, and the `Pattern` type docs.
+- **pattern syntax or fields** → update §8, `PATTERNS.md`, the `Pattern` type docs and the `SmsPattern` model.
 - **parser checks or skip rules** → update §9.
 - **decoder** → update §3.
 
@@ -429,3 +449,9 @@ When you change…
 - 2026-09-22 — Docs refresh: `patterns/` lives at `services/patterns/`, beside `ingest/` rather than
   inside it (the 2026-09-18 entry predates that); the decoder header note dropped; changelog re-sorted; `services/ingest/parser.ts` added to the
   header's update-this-doc list, matching AGENTS.md.
+- 2026-10-31 — Patterns move from `config/patterns/<bank>.json` into the `sms_patterns` table, with a
+  `pending`/`enabled`/`disabled` status, and are learned and reviewed on the Learn page
+  (`POST /api/patterns/learn`, `PATCH /api/patterns`); `npm run patterns:learn`, `mergePatterns` and
+  `savePatternFile` are gone (§8). The parser finds a message's patterns by `bankOf(sender)`, not by a file's
+  `senders`, and is built per import from the enabled rows. Pattern files remain as committed seed data for
+  the demo and the tests. The demo sender is `Demo Bank`, so it slugs to its file's bank, `demo-bank`.

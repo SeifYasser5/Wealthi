@@ -1,9 +1,9 @@
 import 'dotenv/config'
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
 import app from './app'
-import { importFromChatDb } from './services/importer'
+import { seedCategories } from './db/categories'
+import { seedSchedules } from './db/schedules'
 import { seedDemo } from './demo/seed'
+import { config } from './utils/config'
 
 const PORT = process.env.PORT || 3000
 
@@ -11,32 +11,12 @@ const PORT = process.env.PORT || 3000
 // would expose your transactions to the whole network. Set HOST to widen it.
 const HOST = process.env.HOST ?? '127.0.0.1'
 
-// Place your iMessage DB at backend/data/chat.db, or override via IMESSAGE_DB_PATH.
-const CHAT_DB_PATH = process.env.IMESSAGE_DB_PATH ?? join(process.cwd(), 'data', 'chat.db')
-
-function listen(onListening?: () => void): void {
+// Starting the server never imports: the import is a destructive rebuild, so it
+// runs only when asked, from the dashboard (POST /api/import).
+function listen(): void {
   app.listen(Number(PORT), HOST, () => {
     console.log(`Server running on http://${HOST}:${PORT}`)
-    onListening?.()
   })
-}
-
-function importOnStart(): void {
-  if (!existsSync(CHAT_DB_PATH)) {
-    console.log(`[import] No chat.db found at ${CHAT_DB_PATH} — skipping auto-import.`)
-    console.log(`[import] Copy your iMessage DB there or set IMESSAGE_DB_PATH.`)
-    return
-  }
-
-  console.log(`[import] Found ${CHAT_DB_PATH} — starting import...`)
-
-  importFromChatDb(CHAT_DB_PATH)
-    .then(({ months, totalStored, errors }) => {
-      console.log(`[import] Done: ${months} months, ${totalStored} transactions stored, ${errors.length} parse errors.`)
-    })
-    .catch((err: unknown) => {
-      console.error('[import] Failed:', err instanceof Error ? err.message : err)
-    })
 }
 
 // The public demo (see Dockerfile) rebuilds its synthetic ledger before it
@@ -53,5 +33,24 @@ if (process.env.WEALTHI_DEMO === 'true') {
       process.exit(1)
     })
 } else {
-  listen(importOnStart)
+  // Categories and schedules live in the database. The first start that finds
+  // none fills them from config (merchantCategories and extraCategories;
+  // recurringTransactions); later ones leave the pages' edits alone. A failed
+  // seed is reported, not fatal: every other page still works, and the next
+  // start tries again.
+  seedCategories(config)
+    .then((seeded) => {
+      if (seeded > 0) console.log(`Seeded ${seeded} categories from config.`)
+    })
+    .catch((err: unknown) => {
+      console.error('Category seed failed:', err instanceof Error ? err.message : err)
+    })
+    .then(() => seedSchedules(config.recurringTransactions))
+    .then((seeded) => {
+      if (seeded > 0) console.log(`Seeded ${seeded} schedules from config.`)
+    })
+    .catch((err: unknown) => {
+      console.error('Schedule seed failed:', err instanceof Error ? err.message : err)
+    })
+    .finally(listen)
 }

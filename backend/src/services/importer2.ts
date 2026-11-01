@@ -12,7 +12,7 @@ import type {
 } from '../utils/types'
 import { ALL_ACCOUNTS, config } from '../utils/config'
 import { decode } from './ingest/decode'
-import { parser } from './ingest/parser'
+import { createPatternParser, type PatternParser } from './ingest/parser'
 import { classifyTransfer } from './ingest/transfer'
 import { toYearMonth, monthRange } from '../utils/helpers'
 import { openingFor, upsertAllBalances } from '../db/balances'
@@ -20,6 +20,7 @@ import { computeBalance } from './ingest/balance'
 import { findFromMonth, createAllTransactions } from '../db/transactions'
 import { getImportCursor, setImportCursor } from '../db/import-state'
 import { prisma } from '../db/client'
+import { loadEnabledPatterns } from '../db/patterns'
 
 /**
  * Reads new bank SMS from chat.db, parses them into transactions, and refreshes
@@ -35,7 +36,8 @@ export const importFromChatDb = async (chatDbPath: string, now: Date = new Date(
 
   const cursor = await getImportCursor()
   const messages = readMessages(chatDbPath, config.bankSenders, cursor)
-  const { transactions, errors, earliest, maxRowid } = stageMessages(messages)
+  const parser = createPatternParser(await loadEnabledPatterns())
+  const { transactions, errors, earliest, maxRowid } = stageMessages(messages, parser)
   if (transactions.length === 0 || earliest === null || maxRowid === null) return { months: 0, totalStored: 0, errors }
   const { balances, months } = await recomputeBalances(transactions, earliest, toYearMonth(now))
 
@@ -58,7 +60,7 @@ export const importFromChatDb = async (chatDbPath: string, now: Date = new Date(
  * Parse failures are collected as errors rather than thrown, so one bad message
  * never aborts the import.
  */
-const stageMessages = (messages: DbRow[]): StageMessages => {
+const stageMessages = (messages: DbRow[], parser: PatternParser): StageMessages => {
   const transactions: StagedTransaction[] = []
   const errors: ImportError[] = []
   let earliest: string | null = null

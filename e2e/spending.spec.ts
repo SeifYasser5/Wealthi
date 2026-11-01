@@ -17,7 +17,7 @@ test.afterEach(async ({ request }) => {
   // Put the shared database back for the next test.
   await request.patch(
     `/api/transactions/${await cityCafeId(request)}/category`,
-    { data: { category: null } },
+    { data: { categoryId: null } },
   );
 });
 

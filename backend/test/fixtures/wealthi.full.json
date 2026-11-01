@@ -13,10 +13,25 @@
   "extraCategories": [],
   "transferRules": [],
   "recurringTransactions": [
-    { "type": "debit", "amount": 10, "currency": "EGP", "account": "checking", "merchant": "MONTHLY FEE", "startYearMonth": "2026-02", "dayOfMonth": 1 }
+    {
+      "type": "debit",
+      "amount": 10,
+      "currency": "EGP",
+      "account": "checking",
+      "merchant": "MONTHLY FEE",
+      "startYearMonth": "2026-02",
+      "dayOfMonth": 1
+    }
   ],
   "manualTransactions": [
-    { "type": "credit", "amount": 5, "currency": "EGP", "account": "checking", "merchant": "CASHBACK", "date": "2026-03-15" }
+    {
+      "type": "credit",
+      "amount": 5,
+      "currency": "EGP",
+      "account": "checking",
+      "merchant": "CASHBACK",
+      "date": "2026-03-15"
+    }
   ],
   "csvImports": [
     {

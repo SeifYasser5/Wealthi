@@ -22,7 +22,7 @@ export function UncategorizedRows({ transactions }: { transactions: Uncategorize
                 {formatDay(tx.transactedAt)} · {tx.account}
               </span>
             </td>
-            <td className="border-b border-line py-1.5 pr-3 text-right font-mono text-foreground transition-colors group-last:border-0 group-hover:bg-surface-hover">
+            <td className="border-b border-line py-1.5 pr-3 text-right tabular-nums text-foreground transition-colors group-last:border-0 group-hover:bg-surface-hover">
               {money(tx.amount)}
             </td>
             <td className="w-px rounded-r-lg border-b border-line py-1.5 pr-2 transition-colors group-last:border-0 group-hover:bg-surface-hover">

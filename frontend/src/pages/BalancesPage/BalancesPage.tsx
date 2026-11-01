@@ -17,7 +17,8 @@ export function BalancesPage() {
         onYearMonthChange={(ym) => update({ yearMonth: ym })}
       />
 
-      <div className="mb-3 flex items-center justify-end text-sm text-muted">
+      {/* Fixed to the label's line height, so the table doesn't drop while it shows. */}
+      <div className="mb-3 flex h-5 items-center justify-end text-sm text-muted">
         <UpdatingIndicator query={query} />
       </div>
 

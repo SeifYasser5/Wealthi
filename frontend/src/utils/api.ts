@@ -3,11 +3,26 @@ import type {
   ApiError,
   BalancesResponse,
   CategoriesResponse,
+  CategoryBudgetRequest,
+  CategoryRequest,
+  CategoryResponse,
+  CategorySuggestionsResponse,
+  ImportResponse,
+  InsightsResponse,
+  LearnResponse,
+  MerchantCategoryRequest,
+  PatternsResponse,
+  ReorderCategoriesRequest,
+  ScheduleRequest,
+  ScheduleResponse,
+  SchedulesResponse,
+  ScheduleSuggestionsResponse,
   SpendingResponse,
   TransactionFilters,
   TransactionsResponse,
   UpdateCategoryRequest,
   UpdateCategoryResponse,
+  UpdatePatternsRequest,
 } from '@wealthi/shared'
 
 /**
@@ -24,7 +39,14 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(body?.error ?? `Request failed with status ${res.status}`)
   }
 
+  // 204 No Content (a DELETE) has no body to parse.
+  if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
+}
+
+/** A request carrying `body` as JSON. */
+function sendJson(method: 'POST' | 'PATCH' | 'PUT', body: unknown): RequestInit {
+  return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
 }
 
 /** Fetches transactions from the backend, applying any provided filters. */
@@ -52,21 +74,105 @@ export function fetchSpending(yearMonth: string, signal?: AbortSignal): Promise<
   return apiFetch<SpendingResponse>(`/api/spending?${new URLSearchParams({ yearMonth })}`, { signal })
 }
 
+/** Fetches every non-transfer transaction with its category resolved, for the Insights page to slice. */
+export function fetchInsights(signal?: AbortSignal): Promise<InsightsResponse> {
+  return apiFetch<InsightsResponse>('/api/insights', { signal })
+}
+
 /** Fetches the configured account list. */
 export function fetchAccounts(signal?: AbortSignal): Promise<AccountsResponse> {
   return apiFetch<AccountsResponse>('/api/accounts', { signal })
 }
 
-/** Fetches the category vocabulary that populates the category dropdowns. */
+/** Fetches every category in order: the Categories page, and every category dropdown. */
 export function fetchCategories(signal?: AbortSignal): Promise<CategoriesResponse> {
   return apiFetch<CategoriesResponse>('/api/categories', { signal })
 }
 
-/** Assigns a category to one transaction, or clears it when `category` is null. */
-export function updateTransactionCategory(id: string, category: string | null): Promise<UpdateCategoryResponse> {
-  return apiFetch(`/api/transactions/${id}/category`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ category } satisfies UpdateCategoryRequest),
-  })
+/** Fetches the busiest unmapped merchants, offered as new categories. */
+export function fetchCategorySuggestions(signal?: AbortSignal): Promise<CategorySuggestionsResponse> {
+  return apiFetch<CategorySuggestionsResponse>('/api/categories/suggestions', { signal })
+}
+
+/** Adds a category after the others. */
+export function createCategory(name: string): Promise<CategoryResponse> {
+  return apiFetch('/api/categories', sendJson('POST', { name } satisfies CategoryRequest))
+}
+
+/** Renames a category; its transactions and merchants follow. */
+export function renameCategory(id: number, name: string): Promise<CategoryResponse> {
+  return apiFetch(`/api/categories/${id}`, sendJson('PATCH', { name } satisfies CategoryRequest))
+}
+
+/** Deletes a category; the backend refuses one still in use. */
+export function deleteCategory(id: number): Promise<void> {
+  return apiFetch(`/api/categories/${id}`, { method: 'DELETE' })
+}
+
+/** Stores a new order: every category id. Resolves with every category. */
+export function reorderCategories(ids: number[]): Promise<CategoriesResponse> {
+  return apiFetch('/api/categories/order', sendJson('PUT', { ids } satisfies ReorderCategoriesRequest))
+}
+
+/** Sets a category's monthly budget, or clears it with null. */
+export function setCategoryBudget(id: number, budget: number | null): Promise<CategoryResponse> {
+  return apiFetch(`/api/categories/${id}/budget`, sendJson('PUT', { budget } satisfies CategoryBudgetRequest))
+}
+
+/** Maps a merchant to a category, or unmaps it with null. Resolves with every category. */
+export function setMerchantCategory(merchant: string, categoryId: number | null): Promise<CategoriesResponse> {
+  return apiFetch(
+    '/api/merchant-categories',
+    sendJson('PUT', { merchant, categoryId } satisfies MerchantCategoryRequest),
+  )
+}
+
+/** Assigns a category to one transaction, or clears it when `categoryId` is null. */
+export function updateTransactionCategory(id: string, categoryId: number | null): Promise<UpdateCategoryResponse> {
+  return apiFetch(`/api/transactions/${id}/category`, sendJson('PATCH', { categoryId } satisfies UpdateCategoryRequest))
+}
+
+/** Rebuilds the ledger from chat.db; resolves once the import has finished, with its report. */
+export function runImport(): Promise<ImportResponse> {
+  return apiFetch<ImportResponse>('/api/import', { method: 'POST' })
+}
+
+/** Fetches every learned pattern: pending review, enabled and disabled. */
+export function fetchPatterns(signal?: AbortSignal): Promise<PatternsResponse> {
+  return apiFetch<PatternsResponse>('/api/patterns', { signal })
+}
+
+/** Learns patterns from chat.db; resolves once the run has finished, with its report. */
+export function learnPatterns(): Promise<LearnResponse> {
+  return apiFetch<LearnResponse>('/api/patterns/learn', { method: 'POST' })
+}
+
+/** Enables and disables patterns by id; resolves with every pattern. */
+export function updatePatterns(update: UpdatePatternsRequest): Promise<PatternsResponse> {
+  return apiFetch<PatternsResponse>('/api/patterns', sendJson('PATCH', update))
+}
+
+/** Fetches every schedule, by start date. */
+export function fetchSchedules(signal?: AbortSignal): Promise<SchedulesResponse> {
+  return apiFetch<SchedulesResponse>('/api/schedules', { signal })
+}
+
+/** Fetches the merchants charged once a month that no schedule covers yet. */
+export function fetchScheduleSuggestions(signal?: AbortSignal): Promise<ScheduleSuggestionsResponse> {
+  return apiFetch<ScheduleSuggestionsResponse>('/api/schedules/suggestions', { signal })
+}
+
+/** Stores a schedule; its occurrences reach the ledger at the next import. */
+export function createSchedule(schedule: ScheduleRequest): Promise<ScheduleResponse> {
+  return apiFetch('/api/schedules', sendJson('POST', schedule))
+}
+
+/** Replaces a schedule; the next import rewrites every occurrence with it. */
+export function updateSchedule(id: number, schedule: ScheduleRequest): Promise<ScheduleResponse> {
+  return apiFetch(`/api/schedules/${id}`, sendJson('PUT', schedule))
+}
+
+/** Deletes a schedule; its occurrences leave the ledger at the next import. */
+export function deleteSchedule(id: number): Promise<void> {
+  return apiFetch(`/api/schedules/${id}`, { method: 'DELETE' })
 }

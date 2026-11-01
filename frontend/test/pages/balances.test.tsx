@@ -15,7 +15,7 @@ describe('Balances page', () => {
     renderApp('/balances?yearMonth=2026-01')
     const table = await screen.findByRole('table')
     expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual([
-      'Account', 'Opening', 'Credits', 'Debits', 'Transfers In', 'Transfers Out', 'Closing', 'Last Reported', 'Discrepancy',
+      'Account', 'Opening', 'Credits', 'Debits', 'Transfers in', 'Transfers out', 'Closing', 'Last reported', 'Discrepancy',
     ]) // prettier-ignore
     const [, accounts, totals] = within(table).getAllByRole('rowgroup')
     expect(within(accounts).getAllByRole('row').map(rowText)).toEqual([

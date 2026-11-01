@@ -7,7 +7,7 @@ interface Props {
   balances: AccountBalance[]
 }
 
-const COLUMNS = ['Account', 'Opening', 'Credits', 'Debits', 'Transfers In', 'Transfers Out', 'Closing', 'Last Reported', 'Discrepancy'] // prettier-ignore
+const COLUMNS = ['Account', 'Opening', 'Credits', 'Debits', 'Transfers in', 'Transfers out', 'Closing', 'Last reported', 'Discrepancy'] // prettier-ignore
 
 export function BalancesTable({ balances }: Props) {
   const { currency: accountCurrency, label: accountLabel, isLoaded } = useAccounts()
@@ -23,24 +23,24 @@ export function BalancesTable({ balances }: Props) {
       })
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-foreground bg-background">
+    <div className="overflow-x-auto rounded-3xl bg-surface">
       <table className="w-full min-w-3xl border-collapse text-sm">
-        <thead className="text-left text-xs font-semibold uppercase tracking-wide text-foreground">
+        <thead className="text-left text-xs text-muted">
           <tr>
             {COLUMNS.map((column, i) => (
-              <th key={column} className={`px-4 pt-5 pb-3 ${i === 0 ? '' : 'text-right'}`}>
+              <th key={column} className={`px-4 pt-5 pb-3 font-medium ${i === 0 ? '' : 'text-right'}`}>
                 {column}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-foreground">
+        <tbody className="divide-y divide-line">
           {balances.map((bal) => (
             <BalanceRow key={bal.account} label={accountLabel(bal.account)} values={bal} variant="account" />
           ))}
         </tbody>
         {totals.length > 0 && (
-          <tbody className="divide-y divide-primary-line border-t-2 border-primary-line bg-primary-soft">
+          <tbody className="divide-y divide-line border-t border-line bg-surface-raised">
             {totals.map((total) => (
               <BalanceRow key={total.label} label={total.label} values={total.values} variant="total" />
             ))}

@@ -1,6 +1,5 @@
 import { z } from 'zod'
 import type { TransactionFilters, TransactionType, TransferFilter } from '@wealthi/shared'
-import { isSpendingCategory, SPENDING_CATEGORIES } from '../utils/categories'
 import { ALL_ACCOUNTS, isAccountId } from '../utils/config'
 import { isYearMonth } from '../utils/helpers'
 
@@ -11,7 +10,7 @@ const TRANSFER_FILTERS: TransferFilter[] = ['only', 'exclude']
 const TRANSACTION_TYPES: TransactionType[] = ['debit', 'credit']
 
 /** Parses `input`, reporting only the first issue — one message per 400. */
-function validate<T>(schema: z.ZodType<T>, input: unknown): Validated<T> {
+export function validate<T>(schema: z.ZodType<T>, input: unknown): Validated<T> {
   const result = schema.safeParse(input)
   return result.success ? { value: result.data } : { error: result.error.issues[0].message }
 }
@@ -41,30 +40,4 @@ const TransactionFiltersSchema = z
 /** The validated GET /api/transactions filters, or the message for the first param that fails. */
 export function parseTransactionFilters(query: unknown): Validated<TransactionFilters> {
   return validate(TransactionFiltersSchema, query)
-}
-
-const CategoryUpdateSchema = z.object({
-  // Express types route params as `string | string[]`; a plain `:id` is always
-  // a single value, so anything else is malformed.
-  id: z.guid({ error: 'id must be a UUID' }),
-  category: z
-    .string({
-      error: (issue) =>
-        issue.input === undefined ? 'category is required (use null to clear it)' : 'category must be a string or null',
-    })
-    .nullable()
-    // An empty/whitespace string clears the category, same as null.
-    .transform((category) => category?.trim() || null)
-    .refine((category) => category === null || isSpendingCategory(category), {
-      error: `category must be null or one of: ${SPENDING_CATEGORIES.join(', ')}`,
-    }),
-})
-
-/**
- * The transaction id and category from a PATCH /:id/category request.
- * `null` clears the category, and an empty/whitespace string means the same.
- */
-export function parseCategoryUpdate(id: unknown, body: unknown): Validated<{ id: string; category: string | null }> {
-  const category = typeof body === 'object' && body !== null && 'category' in body ? body.category : undefined
-  return validate(CategoryUpdateSchema, { id, category })
 }

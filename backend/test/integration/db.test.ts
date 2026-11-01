@@ -71,14 +71,49 @@ describe('findFromMonth', () => {
 })
 
 describe('updateCategory', () => {
-  it('sets and clears a category, returning the updated row', async () => {
+  it('sets and clears a category, returning the updated row with its name', async () => {
     const [row] = await queryTransactions({ merchant: 'CITY CAFE' })
-    expect((await updateCategory(row.id, 'Dining'))?.category).toBe('Dining')
-    expect((await updateCategory(row.id, null))?.category).toBeNull()
+    const dining = await prisma.category.findUniqueOrThrow({ where: { name: 'Dining' } })
+    expect(await updateCategory(row.id, dining.id)).toMatchObject({ categoryId: dining.id, category: 'Dining' })
+    expect((await queryTransactions({ merchant: 'CITY CAFE' }))[0]).toMatchObject({ category: 'Dining' })
+    expect(await updateCategory(row.id, null)).toMatchObject({ categoryId: null, category: null })
   })
 
-  it('returns null for an unknown id', async () => {
-    expect(await updateCategory('00000000-0000-4000-8000-000000000000', 'Rent')).toBeNull()
+  it('refuses an unknown transaction', async () => {
+    expect(await updateCategory('00000000-0000-4000-8000-000000000000', null)).toEqual({
+      refused: 'not found',
+      error: 'transaction not found',
+    })
+  })
+
+  it('refuses a category that is not stored: the foreign key, not a lookup', async () => {
+    const [row] = await queryTransactions({ merchant: 'CITY CAFE' })
+    expect(await updateCategory(row.id, 999_999)).toEqual({
+      refused: 'invalid',
+      error: 'category 999999 does not exist',
+    })
+    expect((await queryTransactions({ merchant: 'CITY CAFE' }))[0].categoryId).toBeNull()
+  })
+})
+
+describe('createAllTransactions', () => {
+  it('refuses the whole batch when a row names a category that is not stored', async () => {
+    const before = await prisma.transaction.count()
+    const tx = {
+      type: 'debit' as const,
+      amount: 100 as Minor,
+      currency: 'EGP' as const,
+      account: 'checking',
+      merchant: 'NO SUCH CATEGORY',
+      counterAccount: null,
+      reportedBalance: null,
+      transactedAt: new Date('2030-02-10T12:00:00Z'),
+      yearMonth: '2030-02',
+    }
+    await expect(
+      prisma.$transaction((db) => createAllTransactions([tx, { ...tx, categoryId: 999_999 }], db)),
+    ).rejects.toMatchObject({ code: 'P2003' })
+    expect(await prisma.transaction.count()).toBe(before)
   })
 })
 
