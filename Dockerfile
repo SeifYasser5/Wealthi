@@ -31,4 +31,4 @@ ENV NODE_ENV=production \
 WORKDIR /app/backend
 # The demo database is disposable and rebuilt on every start, so the schema is
 # pushed as-is (no migration history, AGENTS.md → Database).
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss && exec node dist/server.js"]
+CMD ["sh", "-c", "../node_modules/.bin/prisma db push --accept-data-loss && exec node dist/server.js"]
