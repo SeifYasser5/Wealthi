@@ -66,7 +66,7 @@ Pattern matching needs clean text because patterns match the **whole** message (
 
 `bankOf(sender)` slugifies the chat.db handle: `"ADCB Egypt"` → `adcb-egypt`. The slug is a pattern's
 `bank` and the prefix of pattern ids and account keys. Learn and the parser both group by it, so handles
-that slug the same share one set of patterns. Only senders in `bankSenders` (wealthi.json) are read.
+that slug the same share one set of patterns. Only senders in the `bank_senders` table (Settings → Senders) are read.
 
 ## 5. Masking (`mask.ts`)
 
@@ -261,7 +261,7 @@ per pattern. Its columns are the `Pattern` fields plus `bank`, a `status` instea
 | `missing` | learn | set when a run of its bank no longer produces this id; the row is kept |
 | `learnedAt` | learn | when the run that first found it ran |
 
-The Learn page (`frontend/src/pages/LearnPage/`) drives it: **Learn patterns** (`POST /api/patterns/learn`
+Settings → Learn (`frontend/src/pages/SettingsPage/components/`) drives it: **Learn patterns** (`POST /api/patterns/learn`
 → `run-learn.ts` → `learnFromChatDb()`), a review of the `pending` rows, and Enabled / Disabled tabs with a
 toggle (`PATCH /api/patterns` `{ enable, disable }`, all or nothing: an unknown id changes nothing). A
 review sends every pending id it showed: the ticked ones to `enable`, the rest to `disable`. Pattern text
@@ -312,7 +312,7 @@ One transaction per run, bank by bank:
 
 - Stored id → keep `status`, `type`, `pattern`; refresh `generated`, `reason`, `review`, `messages`, clear
   `missing`. A reviewed pattern is never offered as new again, whichever way it was reviewed.
-- New id → added `pending`; the run's `added` counts these. The Learn page says *Nothing new found*
+- New id → added `pending`; the run's `added` counts these. Settings → Learn says *Nothing new found*
   when it is 0 (and how many pending rows an earlier run left, if any).
 - A stored id of that bank the run didn't produce → `missing: true`, `messages: 0`, status kept.
 - Banks the run didn't read are left alone. Rows are listed by `missing`, then message count.
@@ -341,7 +341,7 @@ For each decoded message:
    `type`: the pattern's type, or for `by-keyword` the direction words applied to the `direction` slot.
 4. Checks, in order (a failure becomes a `ParseError` with the pattern id):
    type known → amount present → amount well-formed → currency known (`EGP/جم`, `USD/دولار`, `EUR`) →
-   account digits present → `accountSources[accountKey]` exists. After the skip check below, a balance
+   account digits present → a source row maps `accountKey` to an account. After the skip check below, a balance
    that is present must be well-formed too (`balance: invalid amount …`).
 5. **Currency different from the account's currency → `skipped`**, not an error. The SMS doesn't say
    what a foreign charge cost in the account currency.
@@ -450,7 +450,7 @@ When you change…
   inside it (the 2026-09-18 entry predates that); the decoder header note dropped; changelog re-sorted; `services/ingest/parser.ts` added to the
   header's update-this-doc list, matching AGENTS.md.
 - 2026-10-31 — Patterns move from `config/patterns/<bank>.json` into the `sms_patterns` table, with a
-  `pending`/`enabled`/`disabled` status, and are learned and reviewed on the Learn page
+  `pending`/`enabled`/`disabled` status, and are learned and reviewed in Settings → Learn
   (`POST /api/patterns/learn`, `PATCH /api/patterns`); `npm run patterns:learn`, `mergePatterns` and
   `savePatternFile` are gone (§8). The parser finds a message's patterns by `bankOf(sender)`, not by a file's
   `senders`, and is built per import from the enabled rows. Pattern files remain as committed seed data for

@@ -32,9 +32,14 @@
     "WELLCARE PHARMACY": "Health",
     "IRONWORKS GYM": "Health",
     "STREAMFLIX MONTHLY": "Subscriptions",
-    "TUNEBOX MUSIC": "Subscriptions"
+    "TUNEBOX MUSIC": "Subscriptions",
+    "CLOUDVAULT STORAGE": "Subscriptions",
+    "STATIONERY SHOP": "Shopping",
+    "CARD ANNUAL FEE": "Fees",
+    "FEE REVERSAL": "Fees",
+    "CARD CASHBACK": "Rewards"
   },
-  "extraCategories": ["Electronics", "Gifts", "Travel"],
+  "extraCategories": ["Electronics", "Fees", "Gifts", "Rewards", "Travel"],
   "transferRules": [
     { "id": "card-payment-out", "account": "checking", "type": "debit", "merchant": "CARD PAYMENT", "counterAccount": "credit_card" },
     { "id": "card-payment-in", "account": "credit_card", "type": "credit", "merchant": "CARD PAYMENT", "counterAccount": "checking" },
@@ -43,5 +48,14 @@
   ],
   "recurringTransactions": [],
   "manualTransactions": [],
-  "csvImports": []
+  "csvImports": [
+    {
+      "id": "card-rewards",
+      "file": "demo/card-rewards.csv",
+      "from": "2020-01",
+      "account": "credit_card",
+      "columns": { "day": "day", "amount": "amount", "merchant": "merchant" },
+      "values": { "currency": "EGP" }
+    }
+  ]
 }

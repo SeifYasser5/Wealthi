@@ -6,8 +6,9 @@ import { at } from '../fixtures/messages'
 // learnFromChatDb end to end over a fixture chat.db, with the store mocked: what
 // it learns and hands to storeLearned. Storing it is in integration/patterns.test.ts.
 
-const mocks = vi.hoisted(() => ({ storeLearned: vi.fn() }))
+const mocks = vi.hoisted(() => ({ storeLearned: vi.fn(), listBankSenders: vi.fn() }))
 vi.mock('../../src/db/patterns', () => ({ storeLearned: mocks.storeLearned }))
+vi.mock('../../src/db/bank-senders', () => ({ listBankSenders: mocks.listBankSenders }))
 
 const MERCHANTS = ['ACME', 'CITY CAFE', 'BOOK NOOK', 'FUEL 12', 'PHARMACY PLUS']
 const messages: FixtureMessage[] = [
@@ -24,7 +25,10 @@ const messages: FixtureMessage[] = [
 const chatDb = buildChatDb(messages)
 afterAll(() => chatDb.cleanup())
 
-beforeEach(() => mocks.storeLearned.mockReset().mockResolvedValue(1))
+beforeEach(() => {
+  mocks.storeLearned.mockReset().mockResolvedValue(1)
+  mocks.listBankSenders.mockReset().mockResolvedValue(['Test Bank'])
+})
 afterEach(() => vi.doUnmock('../../src/services/ingest/decode'))
 
 async function learn() {

@@ -5,18 +5,20 @@ import { CURRENCIES } from '../utils/utils'
 import type { Account, AccountId } from '@wealthi/shared'
 
 /**
- * The configured account list plus lookups over it. Server-side constant, so it
- * is cached for the session. Until it loads, `accounts` is empty, labels fall
- * back to the raw id and `isLoaded` is false.
+ * The stored account list plus lookups over it. Only the Settings page changes
+ * it, and its writes invalidate this query, so it is cached for the session.
+ * Until it loads, `accounts` is empty, labels fall back to the raw id and
+ * `isLoaded` is false. `query` is the request itself, for a page that shows its state.
  */
 export function useAccounts() {
-  const { data } = useQuery({
+  const query = useQuery({
     queryKey: ['accounts'],
     queryFn: ({ signal }) => fetchAccounts(signal),
     staleTime: Infinity,
   })
+  const { data } = query
 
-  return useMemo(() => {
+  const lookups = useMemo(() => {
     const accounts: Account[] = data?.accounts ?? []
     const byId = new Map(accounts.map((a) => [a.id, a]))
     return {
@@ -27,4 +29,6 @@ export function useAccounts() {
       isAccountId: (id: string) => byId.has(id),
     }
   }, [data])
+
+  return { ...lookups, query }
 }

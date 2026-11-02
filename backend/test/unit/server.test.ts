@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   listen: vi.fn((_port: number, _host: string, onListening: () => void) => onListening()),
   importFromChatDb: vi.fn(),
   seedDemo: vi.fn(),
+  seedSettings: vi.fn(),
   seedCategories: vi.fn(),
   seedSchedules: vi.fn(),
 }))
@@ -14,6 +15,7 @@ vi.mock('dotenv/config', () => ({}))
 vi.mock('../../src/app', () => ({ default: { listen: mocks.listen } }))
 vi.mock('../../src/services/importer', () => ({ importFromChatDb: mocks.importFromChatDb }))
 vi.mock('../../src/demo/seed', () => ({ seedDemo: mocks.seedDemo }))
+vi.mock('../../src/db/settings', () => ({ seedSettings: mocks.seedSettings }))
 vi.mock('../../src/db/categories', () => ({ seedCategories: mocks.seedCategories }))
 vi.mock('../../src/db/schedules', () => ({ seedSchedules: mocks.seedSchedules }))
 
@@ -25,6 +27,7 @@ beforeEach(() => {
   mocks.listen.mockClear()
   mocks.importFromChatDb.mockReset()
   mocks.seedDemo.mockReset()
+  mocks.seedSettings.mockReset().mockResolvedValue(0)
   mocks.seedCategories.mockReset().mockResolvedValue(0)
   mocks.seedSchedules.mockReset().mockResolvedValue(0)
   log = vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -67,6 +70,37 @@ describe('server startup', () => {
     await start({ IMESSAGE_DB_PATH: __filename })
     expect(mocks.importFromChatDb).not.toHaveBeenCalled()
     expect(mocks.seedDemo).not.toHaveBeenCalled()
+  })
+})
+
+describe('settings seed on startup', () => {
+  it('seeds accounts, sources, transfer rules and senders first, before listening', async () => {
+    mocks.seedSettings.mockImplementation(async () => {
+      expect(mocks.seedCategories).not.toHaveBeenCalled()
+      expect(mocks.listen).not.toHaveBeenCalled()
+      return 11
+    })
+    await start({})
+    expect(mocks.seedSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bankSenders: ['Test Bank'],
+        accounts: expect.arrayContaining([expect.objectContaining({ id: 'checking' })]),
+      }),
+    )
+    expect(logged()).toContain('Seeded 11 account, source, transfer rule and sender rows from config.')
+  })
+
+  it('still seeds the categories when the settings seed fails, reporting why', async () => {
+    mocks.seedSettings.mockRejectedValue(new Error('ECONNREFUSED'))
+    await start({})
+    expect(error).toHaveBeenCalledWith('Settings seed failed:', 'ECONNREFUSED')
+    expect(mocks.seedCategories).toHaveBeenCalled()
+  })
+
+  it('reports a non-Error seed failure as-is', async () => {
+    mocks.seedSettings.mockRejectedValue('weird')
+    await start({})
+    expect(error).toHaveBeenCalledWith('Settings seed failed:', 'weird')
   })
 })
 
@@ -144,7 +178,8 @@ describe('server startup in demo mode', () => {
     await startDemo({ IMESSAGE_DB_PATH: __filename, HOST: '0.0.0.0', PORT: '8080' })
     expect(mocks.listen).toHaveBeenCalledWith(8080, '0.0.0.0', expect.any(Function))
     expect(mocks.importFromChatDb).not.toHaveBeenCalled()
-    // seedDemo replaces the categories and schedules itself.
+    // seedDemo replaces the settings, categories and schedules itself.
+    expect(mocks.seedSettings).not.toHaveBeenCalled()
     expect(mocks.seedCategories).not.toHaveBeenCalled()
     expect(mocks.seedSchedules).not.toHaveBeenCalled()
     expect(logged()).toContain('[demo] Seeded 230 transactions over 6 months, 0 parse errors.')

@@ -18,7 +18,7 @@ at {merchant:TEXT} on {date:DATE} {time:TIME} and your Available Balance is {bal
 ```
 
 Literal words must match; `{role:TYPE}` slots capture values. You turn each pattern on or off on the
-Learn page; its text is read-only there, because editing it can change merchant strings.
+Settings → Learn; its text is read-only there, because editing it can change merchant strings.
 
 ## Why
 
@@ -30,7 +30,7 @@ Learn page; its text is read-only there, because editing it can change merchant 
 
 ## How it works (one paragraph)
 
-**Learn patterns** on the Learn page (`POST /api/patterns/learn`) reads bank SMS from `chat.db`, decodes
+**Learn patterns** in Settings → Learn (`POST /api/patterns/learn`) reads bank SMS from `chat.db`, decodes
 them, and groups them by bank (`bankOf(sender)`).
 It **masks** values it can recognise on its own: amounts, currencies, dates, card numbers and references.
 It **mines** templates by grouping messages with the same token count and comparing them position by
@@ -42,11 +42,11 @@ whose id isn't stored yet is added **pending**, and the page offers only those f
 ones to enable and confirm; the rest are saved **disabled**, so they are never offered as new again and
 can be enabled later from the Disabled tab. A stored pattern keeps its status and text on every relearn.
 Each import builds its parser from the **enabled** rows, so a change applies to the next import with no
-restart. The account comes from `accountSources["<bank>:<last4>"]` in `wealthi.json`.
+restart. The account comes from the `account_sources` table (Settings → Sources): `<bank>:<last4>` maps to one.
 
 ```
 LEARN   chat.db → decode → group by bank → mask → mine → label → store new as pending → sms_patterns
-REVIEW  Learn page: tick → enabled, the rest → disabled   (PATCH /api/patterns)
+REVIEW  Settings → Learn: tick → enabled, the rest → disabled   (PATCH /api/patterns)
 IMPORT  chat.db → decode → pattern parser (enabled rows) → transfers → balances → Postgres
 ```
 
@@ -61,12 +61,12 @@ IMPORT  chat.db → decode → pattern parser (enabled rows) → transfers → b
 | Learn run                                                 | `backend/src/services/learn-patterns.ts`, behind `services/run-learn.ts` (one at a time) |
 | Pattern store (learn, review, enabled rows for the parser) | `backend/src/db/patterns.ts`, table `sms_patterns` (`prisma/schema.prisma`) |
 | API                                                       | `backend/src/routes/patterns.ts`: `GET /api/patterns`, `POST /api/patterns/learn`, `PATCH /api/patterns` |
-| Learn page (learn, review, Enabled/Disabled tabs)          | `frontend/src/pages/LearnPage/`                                                |
+| Settings → Learn (learn, review, Enabled/Disabled tabs)          | `frontend/src/pages/SettingsPage/components/` (Learn*.tsx, Pattern*.tsx)|
 | Decoder used by learn + import                            | `backend/src/services/ingest/decode.ts`                                               |
-| Importer wiring (Dashboard → `POST /api/import`)          | `backend/src/services/importer.ts`                                                      |
+| Importer wiring (Settings → `POST /api/import`)          | `backend/src/services/importer.ts`                                                      |
 | Incremental importer variant (not wired)                  | `backend/src/services/importer2.ts`                                                     |
 | Seed pattern files (synthetic, committed)                 | `backend/demo/patterns/demo-bank.json` (loaded by `seedDemo()`), `backend/test/fixtures/patterns/test-bank.json` (loaded by `resetDatabase()` and the e2e seed) |
-| Account mapping (gitignored)                              | `accountSources` in `backend/config/wealthi.json`, keys like `adcb-egypt:1234` |
+| Account mapping                                           | the `account_sources` table (Settings → Sources), keys like `adcb-egypt:1234`; seeded once from `accountSources` in `backend/config/wealthi.json` (gitignored) |
 | Open decisions (gitignored, private notes; agents don't read them) | `backend/config/patterns/TRANSFERS-TODO.md`                  |
 | Tests                                                     | `backend/test/unit/` (`mine`, `mask-mine`, `label`, `learn`, `store`, `pattern`, `learn-patterns`, `run-learn`), `test/integration/patterns.test.ts`, `frontend/test/pages/learn.test.tsx`, `e2e/learn.spec.ts` |
 
@@ -74,14 +74,14 @@ IMPORT  chat.db → decode → pattern parser (enabled rows) → transfers → b
 
 Human-only: these steps read the real `chat.db` and edit real config. Adding a bank needs no code.
 
-1. New bank only: add its SMS sender handle to `bankSenders` in `config/wealthi.json` (restart the server).
+1. New bank only: add its SMS sender handle on the **Settings** page, under *Senders* (no restart needed).
 2. Open the **Learn** page and click **Learn patterns**. It reports how many new patterns it found, or
    *Nothing new found*.
 3. Read each new pattern in **Review new patterns**, especially its *Check before enabling* notes. None start
    selected: click a card to select it, then click **Enable N patterns** (**Disable all** if none are
    selected). The unselected ones are saved disabled.
-4. Run the import from the **Dashboard** and check the reported parse errors.
-5. If the import reports `no account mapped for source "<bank>:<last4>"`, add that key to `accountSources`.
+4. Run the import from **Settings → Import** and check the reported parse errors.
+5. If the import reports `no account mapped for source "<bank>:<last4>"`, map that key to an account on the **Settings** page, under *Sources*.
 6. If the config shape changed, add placeholder keys to `config/wealthi.example.json`.
 
 The table starts empty: until patterns are learned and enabled, an import parses nothing (every message

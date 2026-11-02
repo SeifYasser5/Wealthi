@@ -264,6 +264,17 @@ describe('buildChart', () => {
     expect(buildChart(rows, view({ by: 'merchant', chart: 'table' }), ctx()).points).toHaveLength(8)
   })
 
+  it('ranks income by what came in, and breaks a tie by name', () => {
+    const rows = [
+      row({ amount: 100, type: 'credit', merchant: 'B' }),
+      row({ amount: 100, type: 'credit', merchant: 'A' }),
+      row({ amount: 900, merchant: 'C' }),
+    ]
+    const chart = buildChart(rows, view({ measure: 'received', by: 'merchant' }), ctx())
+    expect(chart.points.map((p) => p.key)).toEqual(['A', 'B'])
+    expect(chart.total).toBe(200)
+  })
+
   it('shows cash flow as income and spending, totalled as the net', () => {
     const rows = [row({ amount: 100 }), row({ amount: 1000, type: 'credit' })]
     const chart = buildChart(rows, view({ measure: 'flow', by: 'account' }), ctx())

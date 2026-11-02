@@ -1,10 +1,13 @@
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Repeat } from 'lucide-react'
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, PencilLine, Repeat } from 'lucide-react'
 import { useAccounts } from '../../../hooks/useAccounts'
 import { formatDate, isBalanced, money } from '../../../utils/utils'
 import type { Transaction } from '@wealthi/shared'
 
 const CELL = 'whitespace-nowrap px-4 py-3.5'
 const DASH = <span className="text-muted">—</span>
+
+/** A row with no SMS and no schedule behind it was entered by hand (CSV entries never reach `transactions`). */
+const isManual = (tx: Transaction) => tx.rawText === null && tx.scheduleId === null
 
 /** The round icon in front of a merchant, Revolut style: what kind of movement this row is. */
 export function TransactionIcon({ tx, size = 'sm' }: { tx: Transaction; size?: 'sm' | 'lg' }) {
@@ -74,6 +77,15 @@ export function TransactionRow({
             >
               <Repeat size={12} aria-hidden />
               Scheduled
+            </span>
+          )}
+          {isManual(tx) && (
+            <span
+              title="Entered by hand on the Manual page"
+              className="inline-flex items-center gap-1 rounded-full bg-surface-hover px-2.5 py-0.5 text-xs font-medium whitespace-nowrap text-subtle"
+            >
+              <PencilLine size={12} aria-hidden />
+              Manual
             </span>
           )}
         </div>

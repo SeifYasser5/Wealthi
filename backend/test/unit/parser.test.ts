@@ -4,9 +4,11 @@ import type { Pattern } from '../../src/services/patterns/pattern'
 import { classifyTransfer } from '../../src/services/ingest/transfer'
 import type { DecodedMessage } from '../../src/utils/types'
 import { fixtureParser as parser } from '../fixtures/pattern-files'
+import { fixtureSettings } from '../fixtures/settings'
 
 // `parser` is built from test/fixtures/patterns and resolves accounts through
-// test/fixtures/wealthi.test.json (see vitest.config.mts).
+// the settings in test/fixtures/settings.ts (test/fixtures/wealthi.test.json, see vitest.config.mts).
+const rules = fixtureSettings.transferRules
 
 const message = (text: string, sender = 'Test Bank'): DecodedMessage => ({
   rowid: 1n,
@@ -65,12 +67,15 @@ describe('parser', () => {
 
 describe('parser rejections', () => {
   const only = (pattern: string, type: Pattern['type'] = 'debit') =>
-    createPatternParser([
-      {
-        bank: 'test-bank',
-        patterns: [{ id: 'test-bank:p', enabled: true, type, pattern, generated: pattern, reason: '', messages: 0 }],
-      },
-    ])
+    createPatternParser(
+      [
+        {
+          bank: 'test-bank',
+          patterns: [{ id: 'test-bank:p', enabled: true, type, pattern, generated: pattern, reason: '', messages: 0 }],
+        },
+      ],
+      fixtureSettings,
+    )
   const cause = (r: ReturnType<typeof parser>) => {
     if (r.ok || r.skipped) throw new Error('expected a parse error')
     return r.error.cause
@@ -189,33 +194,33 @@ describe('classifyTransfer', () => {
   it('matches a rule without a merchant on any merchant', () => {
     const r = parser(message('Account *3333 credited with USD 10.00 from ANYONE. Balance USD 10.00'))
     if (!r.ok) throw new Error('expected a match')
-    expect(classifyTransfer(r.value).counterAccount).toBe('checking')
+    expect(classifyTransfer(r.value, rules).counterAccount).toBe('checking')
   })
 
   it('leaves a leg that already has a counter account alone', () => {
     const r = parser(message('Account *1111 debited EGP 250.00 for CARD PAYMENT. Balance EGP 5,750.00'))
     if (!r.ok) throw new Error('expected a match')
     const tagged = { ...r.value, counterAccount: 'savings_usd' }
-    expect(classifyTransfer(tagged)).toBe(tagged)
+    expect(classifyTransfer(tagged, rules)).toBe(tagged)
   })
 
   it('needs account and direction to match too', () => {
     const r = parser(message('Account *1111 credited with EGP 250.00 from CARD PAYMENT. Balance EGP 1.00'))
     if (!r.ok) throw new Error('expected a match')
-    expect(classifyTransfer(r.value).counterAccount).toBeNull()
+    expect(classifyTransfer(r.value, rules).counterAccount).toBeNull()
   })
 
   it('tags a leg matching a transfer rule and leaves others alone', () => {
     const r = parser(message('Account *1111 debited EGP 250.00 for CARD PAYMENT. Balance EGP 5,750.00'))
     if (!r.ok) throw new Error('expected a match')
-    expect(classifyTransfer(r.value).counterAccount).toBe('card')
-    expect(classifyTransfer({ ...r.value, merchant: 'SOMEONE ELSE' }).counterAccount).toBeNull()
+    expect(classifyTransfer(r.value, rules).counterAccount).toBe('card')
+    expect(classifyTransfer({ ...r.value, merchant: 'SOMEONE ELSE' }, rules).counterAccount).toBeNull()
   })
 })
 
 describe('parser error text', () => {
   it('names the parser and the sender whose bank has no enabled patterns', () => {
-    const r = createPatternParser([])(message('anything', 'Stranger'))
+    const r = createPatternParser([], fixtureSettings)(message('anything', 'Stranger'))
     if (r.ok || r.skipped) throw new Error('expected a parse error')
     expect(r.error.cause).toBe('no enabled patterns for sender "Stranger"')
     expect(r.error.message).toMatch(/^\[patterns\] failed to parse/)

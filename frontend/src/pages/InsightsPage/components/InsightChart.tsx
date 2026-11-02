@@ -22,11 +22,12 @@ import {
   compactNumber,
   cssColor,
   formatMeasure,
+  share,
   isTimeDimension,
   type ChartData,
   type View,
 } from '../../../utils/insights'
-import { ChartTooltip, share, type Datum } from './ChartTooltip'
+import { ChartTooltip, type Datum } from './ChartTooltip'
 
 interface Props {
   data: ChartData
@@ -120,6 +121,7 @@ function Bars({ rows, data, view, drill }: { rows: Datum[]; data: ChartData; vie
             fill={cssColor(s.swatch)}
             stackId={stacked ? 'stack' : undefined}
             maxBarSize={MAX_BAR}
+            isAnimationActive={false}
             // Only a stack's outer segment gets the rounded end; inner ones meet square, a surface hairline apart.
             radius={!stacked || i === data.series.length - 1 ? end : 0}
             stroke={stacked ? SURFACE : undefined}
@@ -233,6 +235,7 @@ function Trend({ rows, data, view }: { rows: Datum[]; data: ChartData; view: Vie
             strokeWidth={2}
             fill={`url(#${id})`}
             dot={false}
+            isAnimationActive={false}
             activeDot={{ ...activeDot, fill: color }}
           />
         </AreaChart>
@@ -257,6 +260,7 @@ function Trend({ rows, data, view }: { rows: Datum[]; data: ChartData; view: Vie
             stroke={cssColor(s.swatch)}
             strokeWidth={2}
             dot={false}
+            isAnimationActive={false}
             activeDot={{ ...activeDot, fill: cssColor(s.swatch) }}
           />
         ))}

@@ -1,6 +1,5 @@
 import { prisma } from './client'
-import { config } from '../utils/config'
-import type { AccountBalance, AccountId, MinorBalance } from '../utils/types'
+import type { AccountBalance, AccountId, MinorBalance, StoredAccount } from '../utils/types'
 import { decimalToMinor, minorToDecimal, minorToNumber, type Minor } from '../utils/money'
 import type { Prisma } from '@prisma/client'
 
@@ -48,19 +47,24 @@ export async function upsertBalance(bal: MinorBalance, db: Db = prisma): Promise
 
 /**
  * Opening balances for `yearMonth` = closing balances of the most recent
- * snapshotted month strictly before it. Falls back to the genesis openingBalances
- * when no earlier snapshot exists (i.e. `yearMonth` is the very first month).
+ * snapshotted month strictly before it. Falls back to the accounts' opening
+ * balances when no earlier snapshot exists (i.e. `yearMonth` is the very first month).
  */
-export async function openingFor(yearMonth: string, db: Db = prisma): Promise<OpeningBalances> {
+export async function openingFor(
+  yearMonth: string,
+  accounts: StoredAccount[],
+  db: Db = prisma,
+): Promise<OpeningBalances> {
+  const genesis = (): OpeningBalances => Object.fromEntries(accounts.map((a) => [a.id, a.openingBalance]))
   const prior = await db.monthlyBalance.findFirst({
     where: { yearMonth: { lt: yearMonth } },
     orderBy: { yearMonth: 'desc' },
     select: { yearMonth: true },
   })
-  if (!prior) return { ...config.openingBalances }
+  if (!prior) return genesis()
 
   const rows = await db.monthlyBalance.findMany({ where: { yearMonth: prior.yearMonth } })
-  const opening = { ...config.openingBalances }
+  const opening = genesis()
   for (const row of rows) {
     opening[row.account as AccountId] = decimalToMinor(row.closingBalance)
   }

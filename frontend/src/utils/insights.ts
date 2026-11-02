@@ -275,6 +275,13 @@ export function formatMeasure(measure: Measure, value: number): string {
   return measure === 'count' ? value.toLocaleString() : money(value)
 }
 
+/** "42%", or "<1%" for a sliver that would otherwise read as nothing. */
+export function share(value: number, total: number): string {
+  if (total <= 0) return '0%'
+  const pct = (value / total) * 100
+  return pct > 0 && pct < 1 ? '<1%' : `${Math.round(pct)}%`
+}
+
 const COMPACT = new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 })
 
 /** Axis ticks: in full under 10,000, compact (12K, 1.2M) from there. */

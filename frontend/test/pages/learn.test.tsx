@@ -36,11 +36,17 @@ function learnRespondsWith(body: Partial<LearnResponse>) {
   server.use(http.post('*/api/patterns/learn', () => HttpResponse.json({ ...LEARN_REPORT, ...body })))
 }
 
-describe('Learn page', () => {
-  it('is in the nav bar and opens on the stored patterns, enabled first', async () => {
-    const { user } = renderApp('/transactions')
-    await user.click(within(screen.getByRole('navigation')).getByRole('link', { name: 'Learn' }))
-    expect(await screen.findByRole('heading', { name: 'Learn', level: 1 })).toBeInTheDocument()
+/** Opens Settings and switches to its Learn section. */
+async function openLearn() {
+  const view = renderApp('/settings')
+  await view.user.click(screen.getByRole('radio', { name: 'Learn' }))
+  return view
+}
+
+describe('Settings → Learn', () => {
+  it('is a Settings section and opens on the stored patterns, enabled first', async () => {
+    await openLearn()
+    expect(within(screen.getByRole('navigation')).queryByRole('link', { name: 'Learn' })).toBeNull()
     expect(learnButton()).toHaveTextContent('Learn patterns')
 
     await stored()
@@ -56,7 +62,7 @@ describe('Learn page', () => {
   })
 
   it('reads a pattern as a sentence, each slot a named chip coloured by what it holds', async () => {
-    renderApp('/learn')
+    await openLearn()
     await stored()
     const merchant = screen.getByText('Merchant')
     expect(merchant).toHaveAttribute('title', '{merchant:TEXT}')
@@ -68,7 +74,7 @@ describe('Learn page', () => {
 
   it('shows a slot whose value is not used as a dashed placeholder', async () => {
     api.patterns[0] = { ...api.patterns[0], pattern: 'Spent {amount:NUM} . Limit {:CUR} {:NUM}' }
-    renderApp('/learn')
+    await openLearn()
     await stored()
     const ignored = screen.getByText('any number')
     expect(ignored).toHaveClass('border-dashed')
@@ -77,7 +83,7 @@ describe('Learn page', () => {
   })
 
   it('shows the disabled patterns in their own tab, flagging one the latest learn did not see', async () => {
-    const { user } = renderApp('/learn')
+    const { user } = await openLearn()
     await stored()
     await user.click(tab(/disabled/i))
     expect(tab(/disabled/i)).toHaveAttribute('aria-selected', 'true')
@@ -89,7 +95,7 @@ describe('Learn page', () => {
 
   it('learns, then offers only the new patterns for review', async () => {
     const release = hold('post', '*/api/patterns/learn')
-    const { user } = renderApp('/learn')
+    const { user } = await openLearn()
     await stored()
     await user.click(learnButton())
 
@@ -115,7 +121,7 @@ describe('Learn page', () => {
   })
 
   it('enables what you select, saves the rest disabled, and moves both into the tabs', async () => {
-    const { user } = renderApp('/learn')
+    const { user } = await openLearn()
     await stored()
     await user.click(learnButton())
     const section = await review()
@@ -132,7 +138,7 @@ describe('Learn page', () => {
   })
 
   it('selects and clears every pattern at once', async () => {
-    const { user } = renderApp('/learn')
+    const { user } = await openLearn()
     await stored()
     await user.click(learnButton())
     const section = await review()
@@ -149,7 +155,7 @@ describe('Learn page', () => {
   })
 
   it('finds nothing new on a second run once the first was reviewed', async () => {
-    const { user } = renderApp('/learn')
+    const { user } = await openLearn()
     await stored()
     await user.click(learnButton())
     await user.click(within(await review()).getByRole('button', { name: 'Disable all' }))
@@ -164,7 +170,7 @@ describe('Learn page', () => {
 
   it('offers patterns left pending by an earlier run without learning again, and says so', async () => {
     api.patterns.push(LEARNED[0])
-    const { user } = renderApp('/learn')
+    const { user } = await openLearn()
     const section = await review()
     expect(within(section).getAllByRole('listitem')).toHaveLength(1)
 
@@ -178,7 +184,7 @@ describe('Learn page', () => {
   it('counts several leftover patterns and undecodable messages in the report', async () => {
     api.patterns.push(...LEARNED)
     learnRespondsWith({ added: 0, undecodable: 3 })
-    const { user } = renderApp('/learn')
+    const { user } = await openLearn()
     await review()
     await user.click(learnButton())
     expect(await report()).toHaveTextContent(
@@ -188,14 +194,14 @@ describe('Learn page', () => {
 
   it('notes undecodable messages when it found something too', async () => {
     learnRespondsWith({ added: 1, undecodable: 1 })
-    const { user } = renderApp('/learn')
+    const { user } = await openLearn()
     await user.click(learnButton())
     expect(await report()).toHaveTextContent('Review them below. 1 message could not be decoded and was left out.')
   })
 
   it('says where it looked when there is no chat.db', async () => {
     learnRespondsWith({ status: 'skipped', source: '/missing/chat.db', messages: 0 })
-    const { user } = renderApp('/learn')
+    const { user } = await openLearn()
     await user.click(learnButton())
     const card = await report()
     expect(within(card).getByRole('heading', { name: 'Learn skipped' })).toBeInTheDocument()
@@ -209,7 +215,7 @@ describe('Learn page', () => {
         once: true,
       }),
     )
-    const { user } = renderApp('/learn')
+    const { user } = await openLearn()
     await user.click(learnButton())
     expect(await screen.findByRole('alert')).toHaveTextContent('learn failed: db down')
     expect(learnButton()).toBeEnabled()
@@ -221,13 +227,14 @@ describe('Learn page', () => {
 
   it('still shows a running learn after leaving the page and coming back', async () => {
     const release = hold('post', '*/api/patterns/learn')
-    const { user } = renderApp('/learn')
+    const { user } = await openLearn()
     await user.click(learnButton())
 
     const nav = screen.getByRole('navigation')
     await user.click(within(nav).getByRole('link', { name: 'Balances' }))
     await screen.findByRole('heading', { name: 'Balances', level: 1 })
-    await user.click(within(nav).getByRole('link', { name: 'Learn' }))
+    await user.click(within(nav).getByRole('link', { name: 'Settings' }))
+    await user.click(screen.getByRole('radio', { name: 'Learn' }))
 
     expect(learnButton()).toBeDisabled()
     release()
@@ -236,7 +243,7 @@ describe('Learn page', () => {
   })
 
   it('shows the review as saving while it is sent', async () => {
-    const { user } = renderApp('/learn')
+    const { user } = await openLearn()
     await user.click(learnButton())
     const section = await review()
 
@@ -252,7 +259,7 @@ describe('Learn page', () => {
     server.use(
       http.patch('*/api/patterns', () => HttpResponse.json({ error: 'unknown pattern ids: x' }, { status: 404 })),
     )
-    const { user } = renderApp('/learn')
+    const { user } = await openLearn()
     await user.click(learnButton())
     const section = await review()
     await user.click(within(section).getByRole('button', { name: 'Disable all' }))
@@ -261,7 +268,7 @@ describe('Learn page', () => {
   })
 
   it('moves a pattern between the tabs when you click it', async () => {
-    const { user } = renderApp('/learn')
+    const { user } = await openLearn()
     await stored()
     const toggle = screen.getByRole('checkbox', { name: 'Enable test-bank:charge' })
     expect(toggle).toBeChecked()
@@ -280,7 +287,7 @@ describe('Learn page', () => {
 
   it('says when a tab is empty', async () => {
     api.patterns = api.patterns.filter((p) => p.status === 'enabled')
-    const { user } = renderApp('/learn')
+    const { user } = await openLearn()
     await stored()
     await user.click(tab(/disabled/i))
     expect(screen.getByRole('tabpanel')).toHaveTextContent('No disabled patterns.')
@@ -290,7 +297,7 @@ describe('Learn page', () => {
     server.use(
       http.patch('*/api/patterns', () => HttpResponse.json({ error: 'failed to update patterns' }, { status: 500 })),
     )
-    const { user } = renderApp('/learn')
+    const { user } = await openLearn()
     await stored()
     await user.click(screen.getByRole('checkbox', { name: 'Enable test-bank:charge' }))
     expect(await within(await stored()).findByRole('alert')).toHaveTextContent('failed to update patterns')
@@ -301,7 +308,7 @@ describe('Learn page', () => {
     server.use(
       http.get('*/api/patterns', () => HttpResponse.json({ error: 'failed to list patterns' }, { status: 500 })),
     )
-    renderApp('/learn')
+    await openLearn()
     expect(await screen.findByText('failed to list patterns')).toBeInTheDocument()
     expect(learnButton()).toBeEnabled()
   })

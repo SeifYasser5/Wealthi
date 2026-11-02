@@ -1,7 +1,14 @@
 import { existsSync } from 'node:fs'
 import { readMessages } from './ingest/reader'
-import type { DbRow, StagedTransaction, MinorBalance, StageMessages, RecomputeBalance } from '../utils/types'
-import { ALL_ACCOUNTS, config } from '../utils/config'
+import type {
+  DbRow,
+  StagedTransaction,
+  MinorBalance,
+  StageMessages,
+  RecomputeBalance,
+  StoredAccount,
+  StoredTransferRule,
+} from '../utils/types'
 import { decode } from './ingest/decode'
 import { createPatternParser, type PatternParser } from './ingest/parser'
 import { classifyTransfer } from './ingest/transfer'
@@ -13,29 +20,35 @@ import { prisma } from '../db/client'
 import { loadEnabledPatterns } from '../db/patterns'
 import { ImportError, ImportSummary } from '../utils/types'
 import { loadCsvTransactions } from '../utils/helpers/csv-import'
-import { manualTransactions } from '../utils/helpers/manual-transactions'
+import { stageManualTransactions } from '../utils/helpers/manual-transactions'
 import { stageSchedules } from '../utils/helpers/schedule'
 import { loadSchedules } from '../db/schedules'
+import { loadManualTransactions } from '../db/manual-transactions'
+import { loadIngestSettings } from '../db/settings'
 
 export async function importFromChatDb(chatDbPath: string): Promise<ImportSummary> {
   if (!existsSync(chatDbPath)) throw new Error(`chat.db not found at: ${chatDbPath}`)
 
-  const messages = readMessages(chatDbPath, config.bankSenders, undefined)
+  // Read afresh on every run, like the patterns, so a Settings edit applies without a restart.
+  const settings = await loadIngestSettings()
+  const messages = readMessages(chatDbPath, settings.bankSenders, undefined)
   // Built from the table on every run, so a pattern enabled on the Learn page
   // applies to this import without a restart.
-  const parser = createPatternParser(await loadEnabledPatterns())
-  const { transactions, errors, earliest } = stageMessages(messages, parser)
+  const parser = createPatternParser(await loadEnabledPatterns(), settings)
+  const { transactions, errors, earliest } = stageMessages(messages, parser, settings.transferRules)
   // No SMS transaction means an empty or unreadable chat.db: keep the stored
   // ledger rather than rebuilding it out of the config entries alone.
   if (transactions.length === 0 || earliest === null) return { months: 0, totalStored: 0, errors }
 
-  // Manual entries and the schedules' occurrences through today are part of
-  // the ledger, not just of the balance math: they are stored next to the SMS
-  // rows so the transactions API shows the same set of rows the balances were
-  // computed from. Each occurrence carries its schedule's id.
+  // Manual transactions (the manual_transactions table) and the schedules'
+  // occurrences through today are part of the ledger, not just of the balance
+  // math: they are copied next to the SMS rows so the transactions API shows the
+  // same set of rows the balances were computed from, and a rebuild never loses
+  // one. Each occurrence carries its schedule's id.
+  const manualTransactions = stageManualTransactions(await loadManualTransactions())
   const scheduled = stageSchedules(await loadSchedules(), new Date())
   const stored = [...manualTransactions, ...scheduled, ...transactions]
-  const { balances, months } = await recomputeBalances(stored)
+  const { balances, months } = await recomputeBalances(stored, settings.accounts)
 
   await prisma.$transaction(
     async (db) => {
@@ -50,7 +63,7 @@ export async function importFromChatDb(chatDbPath: string): Promise<ImportSummar
   return { months, totalStored: stored.length, errors }
 }
 
-function stageMessages(messages: DbRow[], parser: PatternParser): StageMessages {
+function stageMessages(messages: DbRow[], parser: PatternParser, transferRules: StoredTransferRule[]): StageMessages {
   const transactions: StagedTransaction[] = []
   const errors: ImportError[] = []
   let earliest: string | null = null
@@ -68,7 +81,7 @@ function stageMessages(messages: DbRow[], parser: PatternParser): StageMessages 
       continue
     }
 
-    const tx = classifyTransfer(parsed.value)
+    const tx = classifyTransfer(parsed.value, transferRules)
     const yearMonth = toYearMonth(tx.transactedAt)
     transactions.push({ ...tx, yearMonth })
     if (earliest === null || yearMonth < earliest) earliest = yearMonth
@@ -79,18 +92,18 @@ function stageMessages(messages: DbRow[], parser: PatternParser): StageMessages 
 
 // `staged` already carries the manual entries and scheduled occurrences; only the CSV rows
 // are still balance-only, loaded per month below.
-async function recomputeBalances(staged: StagedTransaction[]): RecomputeBalance {
+async function recomputeBalances(staged: StagedTransaction[], accounts: StoredAccount[]): RecomputeBalance {
   const byMonth = groupByMonth(staged)
   const months = [...byMonth.keys()].sort().slice(-10)
   const balances: MinorBalance[] = []
-  let opening = { ...config.openingBalances }
+  let opening = Object.fromEntries(accounts.map((a) => [a.id, a.openingBalance]))
 
   for (const yearMonth of months) {
     const csv = loadCsvTransactions(yearMonth)
     const monthTxs = [...(byMonth.get(yearMonth) ?? []), ...csv]
     const nextOpening = { ...opening }
 
-    for (const account of ALL_ACCOUNTS) {
+    for (const { id: account } of accounts) {
       const accountTxs = monthTxs.filter((t) => t.account === account)
       const balance = computeBalance(account, yearMonth, opening[account], accountTxs)
       balances.push(balance)

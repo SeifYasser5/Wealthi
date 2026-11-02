@@ -4,10 +4,10 @@ import {
   SWATCH_BG,
   formatMeasure,
   isTimeDimension,
+  share,
   type ChartData,
   type View,
 } from '../../../utils/insights'
-import { share } from './ChartTooltip'
 
 interface Props {
   data: ChartData

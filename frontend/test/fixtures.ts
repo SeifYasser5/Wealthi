@@ -1,23 +1,41 @@
 import type {
   Account,
   AccountBalance,
+  AccountSource,
   Category,
   ImportResponse,
   InsightRow,
   LearnResponse,
   PatternRow,
+  ManualTransaction,
   Schedule,
   SpendingResponse,
   Transaction,
+  TransferRule,
 } from '@wealthi/shared'
 
 // Synthetic API payloads — never real accounts, merchants or amounts.
 
 export const ACCOUNTS: Account[] = [
-  { id: 'checking', label: 'Checking', currency: 'EGP' },
-  { id: 'card', label: 'Credit Card', currency: 'EGP' },
-  { id: 'savings_usd', label: 'Savings (USD)', currency: 'USD' },
+  { id: 'checking', label: 'Checking', currency: 'EGP', openingBalance: 1000 },
+  { id: 'card', label: 'Credit Card', currency: 'EGP', openingBalance: -250.5 },
+  { id: 'savings_usd', label: 'Savings (USD)', currency: 'USD', openingBalance: 0 },
 ]
+
+/** GET /api/account-sources, by key. */
+export const ACCOUNT_SOURCES: AccountSource[] = [
+  { source: 'test-bank:1111', account: 'checking' },
+  { source: 'test-bank:2222', account: 'card' },
+]
+
+/** GET /api/transfer-rules, a merchant ahead of the catch-all. */
+export const TRANSFER_RULES: TransferRule[] = [
+  { id: 1, account: 'checking', type: 'debit', merchant: 'CARD PAYMENT', counterAccount: 'card' },
+  { id: 2, account: 'savings_usd', type: 'credit', merchant: '', counterAccount: 'checking' },
+]
+
+/** GET /api/bank-senders, by name. */
+export const BANK_SENDERS = ['+15550001111', 'Test Bank']
 
 /** GET /api/categories, in position order. Rent is the only one nothing uses. */
 export const CATEGORIES: Category[] = [
@@ -260,7 +278,15 @@ export const LEARN_REPORT: LearnResponse = {
 }
 
 let insightId = 0
-function insight(transactedAt: string, type: InsightRow['type'], amount: number, merchant: string | null, category: string, over: Partial<InsightRow> = {}): InsightRow { // prettier-ignore
+function insight(
+  transactedAt: string,
+  type: InsightRow['type'],
+  amount: number,
+  merchant: string | null,
+  category: string,
+  over: Partial<InsightRow> = {},
+): InsightRow {
+  // prettier-ignore
   insightId++
   return {
     id: `10000000-0000-4000-8000-${String(insightId).padStart(12, '0')}`,
@@ -298,3 +324,29 @@ export const INSIGHT_ROWS: InsightRow[] = [
 
 /** The clock INSIGHT_ROWS are read against. */
 export const INSIGHTS_NOW = new Date('2026-03-20T12:00:00.000Z')
+
+/** GET /api/manual-transactions, newest first. */
+export const MANUAL_TRANSACTIONS: ManualTransaction[] = [
+  {
+    id: 2,
+    type: 'credit',
+    amount: 5,
+    currency: 'EGP',
+    account: 'checking',
+    merchant: 'CASHBACK',
+    categoryId: null,
+    category: null,
+    date: '2026-01-20',
+  },
+  {
+    id: 1,
+    type: 'debit',
+    amount: 50,
+    currency: 'EGP',
+    account: 'checking',
+    merchant: 'Bank fee',
+    categoryId: 3,
+    category: 'Rent',
+    date: '2026-01-15',
+  },
+]

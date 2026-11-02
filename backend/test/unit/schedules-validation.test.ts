@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { fixtureAccounts } from '../fixtures/settings'
 import { parseScheduleId, parseScheduleRequest } from '../../src/validation/schedules'
 
 const valid = () => ({
@@ -14,21 +15,23 @@ const valid = () => ({
 })
 
 const error = (body: unknown) => {
-  const parsed = parseScheduleRequest(body)
+  const parsed = parseScheduleRequest(body, fixtureAccounts)
   return 'error' in parsed ? parsed.error : null
 }
 
 describe('parseScheduleRequest', () => {
   it('reads the amount into minor units and takes the currency from the account', () => {
-    expect(parseScheduleRequest(valid())).toEqual({ value: { ...valid(), amount: 150050, currency: 'EGP' } })
-    expect(parseScheduleRequest({ ...valid(), account: 'savings_usd' })).toMatchObject({
+    expect(parseScheduleRequest(valid(), fixtureAccounts)).toEqual({
+      value: { ...valid(), amount: 150050, currency: 'EGP' },
+    })
+    expect(parseScheduleRequest({ ...valid(), account: 'savings_usd' }, fixtureAccounts)).toMatchObject({
       value: { currency: 'USD' },
     })
   })
 
   it('trims the merchant and accepts a category, an interval and an end date', () => {
     const body = { ...valid(), merchant: '  GYM ', categoryId: 4, interval: 2, endDate: '2026-12-31' }
-    expect(parseScheduleRequest(body)).toMatchObject({
+    expect(parseScheduleRequest(body, fixtureAccounts)).toMatchObject({
       value: { merchant: 'GYM', categoryId: 4, interval: 2, endDate: '2026-12-31' },
     })
   })

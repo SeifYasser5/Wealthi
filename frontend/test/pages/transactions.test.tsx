@@ -33,9 +33,9 @@ describe('Transactions page', () => {
     expect(await screen.findByLabelText('4 transactions')).toBeInTheDocument()
     expect(await ledgerRows()).toEqual([
       // computed 6000 − 250 = 5750 matches the reported 5750 → discrepancy 0
-      ['Jan 20, 2026', 'Checking', 'CARD PAYMENT↔ Credit Card', 'debit', '250', '5,750', '5,750', '0'],
+      ['Jan 20, 2026', 'Checking', 'CARD PAYMENT↔ Credit CardManual', 'debit', '250', '5,750', '5,750', '0'],
       ['Jan 15, 2026', 'Checking', 'EMPLOYER LTD', 'credit', '5,000', '6,000', '—', '—'],
-      ['Jan 10, 2026', 'Credit Card', 'ACME GROCERS', 'debit', '250', '4,750', '—', '—'],
+      ['Jan 10, 2026', 'Credit Card', 'ACME GROCERSManual', 'debit', '250', '4,750', '—', '—'],
       ['Jan 05, 2026', 'Savings (USD)', '—Scheduled', 'credit', '20', '—', '—', '—'],
     ])
   })

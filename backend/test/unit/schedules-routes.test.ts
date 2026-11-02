@@ -1,5 +1,6 @@
 import request from 'supertest'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { fixtureAccounts } from '../fixtures/settings'
 
 // /api/schedules with db/schedules mocked: status codes, refusals and failing
 // queries. The happy paths against real Postgres live in integration/schedules.test.ts.
@@ -14,7 +15,10 @@ const db = vi.hoisted(() => ({
 }))
 vi.mock('../../src/db/schedules', () => db)
 
+vi.mock('../../src/db/accounts', () => ({ listAccounts: vi.fn() }))
+
 const { default: app } = await import('../../src/app')
+const { listAccounts } = await import('../../src/db/accounts')
 
 const boom = () => Promise.reject(new Error('connection refused'))
 
@@ -32,7 +36,10 @@ const body = {
 const input = { ...body, amount: 10000, currency: 'EGP' }
 const schedule = { ...body, id: 1, currency: 'EGP', category: null, nextDate: '2026-02-01', transactionCount: 0 }
 
-beforeEach(() => vi.resetAllMocks())
+beforeEach(() => {
+  vi.resetAllMocks()
+  vi.mocked(listAccounts).mockResolvedValue(fixtureAccounts)
+})
 
 describe('GET /api/schedules', () => {
   it('lists every schedule', async () => {

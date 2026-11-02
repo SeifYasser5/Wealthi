@@ -86,6 +86,15 @@ describe('seedDemo', () => {
     expect(rent.rawText).toMatch(/^Account \*4821 debited EGP 14,000\.00 for RENT TRANSFER\./)
   })
 
+  it('fills the Manual, Schedules and CSV paths without breaking a reconciliation', async () => {
+    expect(await prisma.manualTransaction.count()).toBe(3)
+    expect(await prisma.schedule.count()).toBe(1)
+    expect(await prisma.transaction.count({ where: { scheduleId: { not: null } } })).toBeGreaterThanOrEqual(5)
+    expect(await prisma.transaction.count({ where: { merchant: 'CARD ANNUAL FEE' } })).toBe(1)
+    const rewards = await prisma.monthlyBalance.findMany({ where: { account: 'credit_card' } })
+    expect(rewards.every((b) => b.discrepancy === null)).toBe(true)
+  })
+
   it('reseeds over its own data, but refuses a database holding anything else', async () => {
     await expect(seedDemo(NOW)).resolves.toMatchObject({ errors: [] })
 

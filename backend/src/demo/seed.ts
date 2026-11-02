@@ -4,7 +4,10 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { replaceCategories } from '../db/categories'
 import { countPatternsOutside, replacePatterns } from '../db/patterns'
+import { demoManualTransactions, demoSchedules } from './extras'
+import { replaceManualTransactions } from '../db/manual-transactions'
 import { replaceSchedules } from '../db/schedules'
+import { replaceSettings } from '../db/settings'
 import { countSmsRowsOutside } from '../db/transactions'
 import { importFromChatDb } from '../services/importer'
 import { bankOf, loadPatternFiles } from '../services/patterns/store'
@@ -20,8 +23,10 @@ export const DEMO_PATTERNS_DIR = resolve(DEMO_DIR, 'patterns')
 
 /**
  * Rebuilds the database as the demo ledger: loads the demo's patterns into
- * sms_patterns, its config's categories into categories and
- * merchant_categories and its recurringTransactions into schedules, writes the
+ * sms_patterns, its config's accounts, opening balances, sources, transfer
+ * rules and senders into their tables, its config's categories into categories and
+ * merchant_categories, its recurringTransactions into schedules and its
+ * manualTransactions into manual_transactions, writes the
  * demo SMS to a throwaway chat.db and runs the live importer over it, exactly
  * as a real import runs — so it also wipes `transactions` and
  * `monthly_balances` first. A visitor's pattern toggles, category edits and
@@ -45,8 +50,10 @@ export async function seedDemo(now = new Date()): Promise<ImportSummary> {
   }
 
   await replacePatterns(loadPatternFiles(DEMO_PATTERNS_DIR))
+  await replaceSettings(config)
   await replaceCategories(config)
-  await replaceSchedules(config.recurringTransactions)
+  await replaceSchedules(demoSchedules(now))
+  await replaceManualTransactions(demoManualTransactions(now))
   return withDemoChatDb(now, importFromChatDb)
 }
 

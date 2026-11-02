@@ -89,7 +89,7 @@ export function InsightsPage() {
         query={query}
         isEmpty={(data) => data.rows.length === 0}
         errorMessage="Failed to load insights"
-        emptyMessage="No transactions yet. Run an import from the Dashboard to see insights."
+        emptyMessage="No transactions yet. Run an import from Settings to see insights."
       >
         {(data) => <Insights rows={data.rows} view={view} update={update} primaryCurrency={currencies[0]} />}
       </QueryState>

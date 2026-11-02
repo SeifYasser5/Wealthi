@@ -1,6 +1,8 @@
 import type {
+  Account,
   AccountBalance,
   AccountId,
+  AccountSource,
   Category,
   CategorySuggestion,
   CategorySuggestionsResponse,
@@ -9,6 +11,7 @@ import type {
   ImportParseError,
   ImportResponse,
   LearnResponse,
+  ManualTransaction,
   PatternRow,
   PatternStatus,
   PatternsResponse,
@@ -19,14 +22,17 @@ import type {
   ScheduleSuggestion,
   ScheduleSuggestionsResponse,
   TransactionType,
+  TransferRule,
 } from '@wealthi/shared'
 import type { Minor } from './money'
 
 // Contract types shared with the frontend, re-exported so backend modules keep
 // importing everything from here.
 export type {
+  Account,
   AccountBalance,
   AccountId,
+  AccountSource,
   Category,
   CategorySuggestion,
   CategorySuggestionsResponse,
@@ -35,6 +41,7 @@ export type {
   ImportParseError,
   ImportResponse,
   LearnResponse,
+  ManualTransaction,
   PatternRow,
   PatternStatus,
   PatternsResponse,
@@ -45,6 +52,7 @@ export type {
   ScheduleSuggestion,
   ScheduleSuggestionsResponse,
   TransactionType,
+  TransferRule,
 }
 
 export interface DbRow {
@@ -177,8 +185,39 @@ export interface MinorBalance {
 
 export type RecomputeBalance = Promise<{ balances: MinorBalance[]; months: number }>
 
-/** A deterministic routing rule for an internal transfer; defined by the config schema. */
-export type { TransferRule } from './config/schema'
+/** A transfer rule as the import reads it. An empty `merchant` matches any merchant. */
+export interface StoredTransferRule {
+  account: AccountId
+  type: TransactionType
+  merchant: string
+  counterAccount: AccountId
+}
+
+/** A validated POST /api/transfer-rules or PUT /api/transfer-rules/:id body. */
+export type TransferRuleInput = StoredTransferRule
+
+/** An account as the import reads it: the opening balance in minor units. */
+export interface StoredAccount {
+  id: AccountId
+  label: string
+  currency: Currency
+  openingBalance: Minor
+}
+
+/** A validated POST /api/accounts body: the opening balance in minor units. */
+export type AccountInput = StoredAccount
+
+/**
+ * What an import or a learn run reads from the settings tables, once at its
+ * start: where SMS come from, which account a source key is, how transfer legs
+ * are tagged, and what each account opens with.
+ */
+export interface IngestSettings {
+  accounts: StoredAccount[]
+  accountSources: Record<string, AccountId>
+  transferRules: StoredTransferRule[]
+  bankSenders: string[]
+}
 
 /** A non-transfer debit as read for the spending breakdown. */
 export interface SpendingTransaction {

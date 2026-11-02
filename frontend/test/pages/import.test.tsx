@@ -5,7 +5,7 @@ import { http, HttpResponse } from 'msw'
 import { MemoryRouter } from 'react-router-dom'
 import type { ImportResponse } from '@wealthi/shared'
 import { describe, expect, it } from 'vitest'
-import { DashboardPage } from '../../src/pages/DashboardPage'
+import { SettingsPage } from '../../src/pages/SettingsPage'
 import { IMPORT_REPORT } from '../fixtures'
 import { newQueryClient, renderApp } from '../render'
 import { api, server } from '../server'
@@ -32,11 +32,11 @@ function respondWith(body: ImportResponse) {
   server.use(http.post('*/api/import', () => HttpResponse.json(body)))
 }
 
-describe('Dashboard page', () => {
-  it('is in the nav bar and starts with no import run', async () => {
+describe('Import (Settings page)', () => {
+  it('is a Settings section and starts with no import run', async () => {
     const { user } = renderApp('/transactions')
-    await user.click(within(screen.getByRole('navigation')).getByRole('link', { name: 'Dashboard' }))
-    expect(await screen.findByRole('heading', { name: 'Dashboard', level: 1 })).toBeInTheDocument()
+    await user.click(within(screen.getByRole('navigation')).getByRole('link', { name: 'Settings' }))
+    await user.click(await screen.findByRole('radio', { name: 'Import' }))
     expect(screen.getByText(/no import run yet/i)).toBeInTheDocument()
     expect(importButton()).toHaveTextContent('Run import')
     expect(imports()).toBe(0)
@@ -44,7 +44,8 @@ describe('Dashboard page', () => {
 
   it('keeps loading while the import runs, then reports it', async () => {
     const release = holdImport()
-    const { user } = renderApp('/dashboard')
+    const { user } = renderApp('/settings')
+    await user.click(await screen.findByRole('radio', { name: 'Import' }))
     await user.click(importButton())
 
     expect(importButton()).toBeDisabled()
@@ -65,7 +66,8 @@ describe('Dashboard page', () => {
   })
 
   it('can be run again, each run replacing the last report', async () => {
-    const { user } = renderApp('/dashboard')
+    const { user } = renderApp('/settings')
+    await user.click(await screen.findByRole('radio', { name: 'Import' }))
     await user.click(importButton())
     await report()
 
@@ -78,13 +80,15 @@ describe('Dashboard page', () => {
 
   it('still shows a running import after leaving the page and coming back', async () => {
     const release = holdImport()
-    const { user } = renderApp('/dashboard')
+    const { user } = renderApp('/settings')
+    await user.click(await screen.findByRole('radio', { name: 'Import' }))
     await user.click(importButton())
 
     const nav = screen.getByRole('navigation')
     await user.click(within(nav).getByRole('link', { name: 'Balances' }))
     await screen.findByRole('heading', { name: 'Balances', level: 1 })
-    await user.click(within(nav).getByRole('link', { name: 'Dashboard' }))
+    await user.click(within(nav).getByRole('link', { name: 'Settings' }))
+    await user.click(await screen.findByRole('radio', { name: 'Import' }))
 
     expect(importButton()).toBeDisabled()
     expect(screen.getByText(/the ledger is being rebuilt/)).toHaveAttribute('role', 'status')
@@ -101,7 +105,8 @@ describe('Dashboard page', () => {
         { sender: 'Other Bank', messageDate: '2026-01-06T09:30:00.000Z', text: 'ODD', reason: 'bad amount' },
       ],
     }) // prettier-ignore
-    const { user } = renderApp('/dashboard')
+    const { user } = renderApp('/settings')
+    await user.click(await screen.findByRole('radio', { name: 'Import' }))
     await user.click(importButton())
     const card = await report()
 
@@ -120,7 +125,8 @@ describe('Dashboard page', () => {
 
   it('says where it looked when there is no chat.db', async () => {
     respondWith({ ...IMPORT_REPORT, status: 'skipped', months: 0, totalStored: 0, source: '/missing/chat.db' })
-    const { user } = renderApp('/dashboard')
+    const { user } = renderApp('/settings')
+    await user.click(await screen.findByRole('radio', { name: 'Import' }))
     await user.click(importButton())
     const card = await report()
     expect(within(card).getByRole('heading', { name: 'Import skipped' })).toBeInTheDocument()
@@ -129,7 +135,8 @@ describe('Dashboard page', () => {
 
   it('says the ledger was kept when chat.db held no transactions', async () => {
     respondWith({ ...IMPORT_REPORT, months: 0, totalStored: 0 })
-    const { user } = renderApp('/dashboard')
+    const { user } = renderApp('/settings')
+    await user.click(await screen.findByRole('radio', { name: 'Import' }))
     await user.click(importButton())
     const card = await report()
     expect(within(card).getByRole('heading', { name: 'Nothing imported' })).toBeInTheDocument()
@@ -138,7 +145,8 @@ describe('Dashboard page', () => {
 
   it('shows why an import failed, and lets you try again', async () => {
     server.use(http.post('*/api/import', () => HttpResponse.json({ error: 'import failed: db down' }, { status: 500 })))
-    const { user } = renderApp('/dashboard')
+    const { user } = renderApp('/settings')
+    await user.click(await screen.findByRole('radio', { name: 'Import' }))
     await user.click(importButton())
     expect(await screen.findByRole('alert')).toHaveTextContent('import failed: db down')
     expect(importButton()).toBeEnabled()
@@ -156,10 +164,11 @@ describe('Dashboard page', () => {
     render(
       <QueryClientProvider client={client}>
         <MemoryRouter>
-          <DashboardPage />
+          <SettingsPage />
         </MemoryRouter>
       </QueryClientProvider>,
     )
+    await user.click(await screen.findByRole('radio', { name: 'Import' }))
     await user.click(importButton())
     await report()
 

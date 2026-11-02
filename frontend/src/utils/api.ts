@@ -1,6 +1,14 @@
 import type {
+  AccountRequest,
+  AccountResponse,
+  AccountSourceRequest,
+  AccountSourceResponse,
+  AccountSourcesResponse,
   AccountsResponse,
+  AccountUpdateRequest,
   ApiError,
+  BankSenderRequest,
+  BankSendersResponse,
   BalancesResponse,
   CategoriesResponse,
   CategoryBudgetRequest,
@@ -12,6 +20,9 @@ import type {
   LearnResponse,
   MerchantCategoryRequest,
   PatternsResponse,
+  ManualTransactionRequest,
+  ManualTransactionResponse,
+  ManualTransactionsResponse,
   ReorderCategoriesRequest,
   ScheduleRequest,
   ScheduleResponse,
@@ -20,6 +31,9 @@ import type {
   SpendingResponse,
   TransactionFilters,
   TransactionsResponse,
+  TransferRuleRequest,
+  TransferRuleResponse,
+  TransferRulesResponse,
   UpdateCategoryRequest,
   UpdateCategoryResponse,
   UpdatePatternsRequest,
@@ -175,4 +189,94 @@ export function updateSchedule(id: number, schedule: ScheduleRequest): Promise<S
 /** Deletes a schedule; its occurrences leave the ledger at the next import. */
 export function deleteSchedule(id: number): Promise<void> {
   return apiFetch(`/api/schedules/${id}`, { method: 'DELETE' })
+}
+
+/** Fetches the manual transactions dated in `yearMonth` ("YYYY-MM"), newest first. */
+export function fetchManualTransactions(yearMonth: string, signal?: AbortSignal): Promise<ManualTransactionsResponse> {
+  return apiFetch<ManualTransactionsResponse>(`/api/manual-transactions?${new URLSearchParams({ yearMonth })}`, {
+    signal,
+  })
+}
+
+/** Stores a manual transaction; the next import copies it into the ledger. */
+export function createManualTransaction(entry: ManualTransactionRequest): Promise<ManualTransactionResponse> {
+  return apiFetch('/api/manual-transactions', sendJson('POST', entry))
+}
+
+/** Replaces a manual transaction; the next import rewrites its ledger row. */
+export function updateManualTransaction(
+  id: number,
+  entry: ManualTransactionRequest,
+): Promise<ManualTransactionResponse> {
+  return apiFetch(`/api/manual-transactions/${id}`, sendJson('PUT', entry))
+}
+
+/** Deletes a manual transaction; its ledger row leaves at the next import. */
+export function deleteManualTransaction(id: number): Promise<void> {
+  return apiFetch(`/api/manual-transactions/${id}`, { method: 'DELETE' })
+}
+
+/** Adds an account; its opening balance reaches the balances at the next import. */
+export function createAccount(account: AccountRequest): Promise<AccountResponse> {
+  return apiFetch('/api/accounts', sendJson('POST', account))
+}
+
+/** Renames an account or changes its opening balance; the id and currency stay. */
+export function updateAccount(id: string, changes: AccountUpdateRequest): Promise<AccountResponse> {
+  return apiFetch(`/api/accounts/${encodeURIComponent(id)}`, sendJson('PUT', changes))
+}
+
+/** Deletes an account nothing names; one in use is refused with what uses it. */
+export function deleteAccount(id: string): Promise<void> {
+  return apiFetch(`/api/accounts/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+/** Every source key with the account it lands on. */
+export function fetchAccountSources(signal?: AbortSignal): Promise<AccountSourcesResponse> {
+  return apiFetch<AccountSourcesResponse>('/api/account-sources', { signal })
+}
+
+/** Maps a source key to an account, moving it if it was mapped elsewhere. */
+export function setAccountSource(mapping: AccountSourceRequest): Promise<AccountSourceResponse> {
+  return apiFetch('/api/account-sources', sendJson('PUT', mapping))
+}
+
+/** Removes a source key; messages on it become parse errors until it is mapped again. */
+export function deleteAccountSource(source: string): Promise<void> {
+  return apiFetch(`/api/account-sources/${encodeURIComponent(source)}`, { method: 'DELETE' })
+}
+
+/** Every transfer rule, in the order the import tries them. */
+export function fetchTransferRules(signal?: AbortSignal): Promise<TransferRulesResponse> {
+  return apiFetch<TransferRulesResponse>('/api/transfer-rules', { signal })
+}
+
+/** Stores a transfer rule; the next import tags the matching legs. */
+export function createTransferRule(rule: TransferRuleRequest): Promise<TransferRuleResponse> {
+  return apiFetch('/api/transfer-rules', sendJson('POST', rule))
+}
+
+/** Replaces a transfer rule. */
+export function updateTransferRule(id: number, rule: TransferRuleRequest): Promise<TransferRuleResponse> {
+  return apiFetch(`/api/transfer-rules/${id}`, sendJson('PUT', rule))
+}
+
+/** Deletes a transfer rule; its transfers lose their tag at the next import. */
+export function deleteTransferRule(id: number): Promise<void> {
+  return apiFetch(`/api/transfer-rules/${id}`, { method: 'DELETE' })
+}
+
+/** The chat.db handles SMS are imported and learned from. */
+export function fetchBankSenders(signal?: AbortSignal): Promise<BankSendersResponse> {
+  return apiFetch<BankSendersResponse>('/api/bank-senders', { signal })
+}
+
+/** Adds a sender; answers with the full list. */
+export function addBankSender(request: BankSenderRequest): Promise<BankSendersResponse> {
+  return apiFetch('/api/bank-senders', sendJson('POST', request))
+}
+
+/** Removes a sender; its messages are no longer imported or learned from. */
+export function deleteBankSender(sender: string): Promise<void> {
+  return apiFetch(`/api/bank-senders/${encodeURIComponent(sender)}`, { method: 'DELETE' })
 }

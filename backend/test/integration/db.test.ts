@@ -9,6 +9,9 @@ import { buildChatDb } from '../fixtures/chat-db'
 import { LEDGER } from '../fixtures/messages'
 import { resetDatabase } from '../setup/reset'
 import type { Minor } from '../../src/utils/money'
+import { fixtureSettings } from '../fixtures/settings'
+
+const accounts = fixtureSettings.accounts
 
 /** The db/ query layer against the imported fixture ledger. */
 
@@ -149,13 +152,13 @@ describe('balances', () => {
   })
 
   it('opens a month with the closing balances of the latest earlier snapshot', async () => {
-    expect(await openingFor('2026-02')).toEqual({ checking: 575000, card: 0, savings_usd: 0 })
+    expect(await openingFor('2026-02', accounts)).toEqual({ checking: 575000, card: 0, savings_usd: 0 })
     // Skips a gap: nothing is stored for 2026-05, so it reads February.
-    expect(await openingFor('2026-06')).toEqual({ checking: 695000, card: -14000, savings_usd: 0 })
+    expect(await openingFor('2026-06', accounts)).toEqual({ checking: 695000, card: -14000, savings_usd: 0 })
   })
 
-  it('falls back to config openingBalances before the first snapshot', async () => {
-    expect(await openingFor('2026-01')).toEqual({ checking: 100000, card: 0, savings_usd: 0 })
+  it('falls back to the accounts opening balances before the first snapshot', async () => {
+    expect(await openingFor('2026-01', accounts)).toEqual({ checking: 100000, card: 0, savings_usd: 0 })
   })
 
   it('upsert overwrites an existing snapshot and stamps computedAt', async () => {

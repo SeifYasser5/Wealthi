@@ -1,14 +1,13 @@
 import { NavLink, useLocation } from 'react-router-dom'
 
 const TABS = [
-  { to: '/dashboard', label: 'Dashboard' },
   { to: '/transactions', label: 'Transactions' },
   { to: '/balances', label: 'Balances' },
   { to: '/spending', label: 'Spending' },
   { to: '/insights', label: 'Insights' },
   { to: '/categories', label: 'Categories' },
   { to: '/schedules', label: 'Schedules' },
-  { to: '/learn', label: 'Learn' },
+  { to: '/settings', label: 'Settings' },
 ]
 
 /** The sticky top bar: wordmark on the left, the pages as a pill segmented control. */

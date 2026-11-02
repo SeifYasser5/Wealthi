@@ -1,36 +1,36 @@
-import { resolve } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
+import { stageManualTransactions } from '../../src/utils/helpers/manual-transactions'
+import type { Minor } from '../../src/utils/money'
+import type { StoredManualTransaction } from '../../src/utils/types'
 
-// manualTransactions is computed once, at import, from config — so each test
-// loads it fresh.
-async function load(now: Date) {
-  vi.resetModules()
-  vi.stubEnv('WEALTHI_CONFIG_PATH', resolve(__dirname, '../fixtures/wealthi.full.json'))
-  vi.useFakeTimers({ toFake: ['Date'], now })
-  return (await import('../../src/utils/helpers/manual-transactions')).manualTransactions
+const entry: StoredManualTransaction = {
+  id: 7,
+  type: 'credit',
+  amount: 500 as Minor,
+  currency: 'EGP',
+  account: 'checking',
+  merchant: 'CASHBACK',
+  categoryId: 3,
+  date: '2026-03-15',
 }
 
-afterEach(() => {
-  vi.useRealTimers()
-  vi.unstubAllEnvs()
-  vi.resetModules()
-})
-
-describe('manualTransactions', () => {
-  it('stages one-off entries as-is, bucketed by their date', async () => {
-    const cashback = (await load(new Date(2026, 3, 1))).find((t) => t.merchant === 'CASHBACK')
-    expect(cashback).toMatchObject({ type: 'credit', amount: 500, yearMonth: '2026-03', counterAccount: null })
-    expect(cashback?.transactedAt.toISOString()).toBe('2026-03-15T00:00:00.000Z')
+describe('stageManualTransactions', () => {
+  it('stages an entry as a ledger row on its local day, bucketed by month', () => {
+    const [staged] = stageManualTransactions([entry])
+    expect(staged).toMatchObject({
+      type: 'credit',
+      amount: 500,
+      merchant: 'CASHBACK',
+      categoryId: 3,
+      yearMonth: '2026-03',
+      counterAccount: null,
+      reportedBalance: null,
+    })
+    expect(staged.transactedAt).toEqual(new Date(2026, 2, 15))
+    expect(staged).not.toHaveProperty('id')
   })
 
-  it('leaves recurringTransactions to the schedules table, which they only seed', async () => {
-    const txs = await load(new Date(2026, 3, 20))
-    expect(txs.map((t) => t.merchant)).toEqual(['CASHBACK'])
-  })
-
-  it('is empty for a config with no manual entries', async () => {
-    vi.resetModules()
-    const { manualTransactions } = await import('../../src/utils/helpers/manual-transactions')
-    expect(manualTransactions).toEqual([])
+  it('is empty for no entries', () => {
+    expect(stageManualTransactions([])).toEqual([])
   })
 })

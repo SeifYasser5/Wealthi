@@ -21,6 +21,7 @@ The frontend is a thin React reader over the read API.
 | `backend/src/services/patterns/`, `services/ingest/decode.ts`, `services/ingest/parser.ts`, `services/learn-patterns.ts`, `services/run-learn.ts`, `db/patterns.ts`, the `sms_patterns` model or seed pattern file format | `docs/PATTERNS.md`, `docs/PATTERNS-ALGORITHM.md` |
 | `services/importer.ts`, `services/importer2.ts`, `services/ingest/balance.ts` | `docs/ARCHITECTURE.md`, `README.md` (*Architecture*, *Ledger correctness*), the importer table below |
 | `backend/src/demo/`, `backend/demo/`, `Dockerfile`, `railway.json` | `README.md` (*Live demo*, *Deploying the demo*), *Demo deployment* below |
+| `db/accounts.ts`, `db/transfer-rules.ts`, `db/bank-senders.ts`, `db/settings.ts`, the settings models, the four settings routes | `README.md` (*Settings*), *Settings* below |
 
 ## Monorepo layout
 
@@ -61,7 +62,7 @@ npm run test:coverage   # both, failing under the thresholds in vitest.config.mt
 npm run test:mutation   # Stryker over the pure logic (~20 min); report in reports/mutation/
 # Human-only, never run by agents (real DB or real chat.db):
 npm run db:push         # sync schema (no migration history); db:migrate and db:studio likewise
-npm run dev             # nodemon + ts-node src/server.ts; its Dashboard imports and its Learn page
+npm run dev             # nodemon + ts-node src/server.ts; its Settings imports and its Settings → Learn
                         # learns from the real chat.db
 
 # Frontend (run from frontend/)
@@ -83,7 +84,7 @@ CI gate, in order: backend `lint`, `format:check`, `typecheck`, `test:coverage`;
 
 ## Running an import
 
-**The import runs only when asked**, from the frontend's Dashboard page: its button calls
+**The import runs only when asked**, from the frontend's Settings page (Import section): its button calls
 `POST /api/import` (`routes/import.ts`) → `runImport()` (`services/run-import.ts`) →
 `importFromChatDb()` from `services/importer.ts`. Starting the server never imports. The request
 stays open until the import finishes and answers with an `ImportResponse` report (status, months,
@@ -91,7 +92,7 @@ transactions stored, each parse error with its reason); a failure is a 500 carry
 Only one import runs at a time: a call made while one is in progress joins it and gets the same
 report. If `chat.db` is missing the report says `skipped` and Postgres is left as it was. In demo
 mode (`WEALTHI_DEMO=true`) `chat.db` is never read: the server runs `seedDemo()` before it listens,
-and an import from the dashboard runs `seedDemo()` again.
+and an import from Settings runs `seedDemo()` again.
 
 ### importer.ts vs importer2.ts — know which one you are editing
 
@@ -100,17 +101,17 @@ and an import from the dashboard runs `seedDemo()` again.
 | Cursor | none — reads **all** matching messages every run | reads from the `import_state` rowid cursor |
 | Writes | **deletes all rows** in `transactions` + `monthly_balances`, then re-inserts | inserts new rows, upserts touched months |
 | Months | re-inserts every transaction, but computes balances for the **last 6** months only (`.slice(-6)`) | recomputes from the earliest touched month forward |
-| Opening balances | `config.openingBalances` seeds the first of those 6 months | `openingFor()` reads the prior month's closing from the DB |
-| Manual entries, schedules | inserted into `transactions` **and** merged into the balance math (each schedule's occurrences through today, marked with `schedule_id`) | not merged |
+| Opening balances | each account's `opening_balance` (the `accounts` table) seeds the first of those 6 months | `openingFor()` reads the prior month's closing from the DB, else the accounts' opening balances |
+| Manual transactions, schedules | inserted into `transactions` **and** merged into the balance math (the `manual_transactions` rows; each schedule's occurrences through today, marked with `schedule_id`) | not merged |
 | CSV entries | merged into the balance math, **not** inserted into `transactions` | not merged |
 
 So the live path is a **destructive full rebuild of a rolling 6-month window**, and
-`config.openingBalances` must be the balance at the **start of that window**, not at genesis — it
+each account's opening balance must be the balance at the **start of that window**, not at genesis — it
 drifts as months roll over.
 
 ## Learning patterns
 
-**Learning also runs only when asked**, from the frontend's Learn page: **Learn patterns** calls
+**Learning also runs only when asked**, from the frontend's Settings → Learn: **Learn patterns** calls
 `POST /api/patterns/learn` (`routes/patterns.ts`) → `runLearn()` (`services/run-learn.ts`) →
 `learnFromChatDb()` (`services/learn-patterns.ts`), which stores every pattern it finds that
 `sms_patterns` doesn't hold yet as `pending` and answers with a `LearnResponse` (`added: 0` is the
@@ -133,10 +134,13 @@ backend/src/
   db/patterns.ts       sms_patterns: store a learn run, list, set status, enabled rows for the parser, seed files
   db/categories.ts     categories + merchant_categories: CRUD, reorder, merchant map, the seed from config
   db/schedules.ts      schedules: CRUD, the rows the import expands, the seed from config
+  db/accounts.ts, db/transfer-rules.ts, db/bank-senders.ts   the Settings tables: CRUD, what the import loads
+  db/settings.ts       loadIngestSettings() (one snapshot per import/learn), the seed from config, the demo's replace
   utils/helpers/schedule.ts   when a schedule's occurrences fall, and the transactions they become
   demo/                ledger.ts (synthetic SMS, dated relative to now); seed.ts (demo mode's import)
 backend/demo/          the demo's committed config + seed pattern file — synthetic, safe to read and edit
 frontend/src/pages/<Name>Page/   <Name>Page.tsx + index.ts + its own components/
+frontend/src/utils/insights.ts   the Insights page's engine: a `View` (measure, grouping, split, period) → chart data, pure
 ```
 
 ## Database
@@ -146,7 +150,8 @@ source of truth; `monthly_balances` is a derived snapshot per `(year_month, acco
 is the `importer2.ts` cursor; `sms_patterns` holds the learned patterns with a
 `pending`/`enabled`/`disabled` status (see *Learning patterns*); `categories` and `merchant_categories`
 hold the categories and the merchant map (see *Categories*); `schedules` holds the repeating
-transactions (see *Schedules*). Prisma 7 takes the URL from `backend/prisma.config.ts`, not
+transactions (see *Schedules*); `manual_transactions` holds the one-off hand-entered ones (see *Manual transactions*); `accounts`, `account_sources`, `transfer_rules` and `bank_senders` hold the
+settings the import reads (see *Settings*). Prisma 7 takes the URL from `backend/prisma.config.ts`, not
 `schema.prisma`; the app builds its own `Pool` in `src/db/client.ts`.
 
 `transactions.raw_text` holds the SMS body a row was parsed from (null for manual/CSV rows), for
@@ -197,11 +202,51 @@ and the account may differ each month; the panel shows the accounts used and the
 Merchants already on a schedule are left out. *Schedule* opens the new-schedule form filled in, starting
 **next month**, because an occurrence from the first SMS would double what the ledger already holds.
 
+## Manual transactions
+
+A manual transaction is a one-off entry with no SMS (a bank fee, a reversal, an adjustment): a row in
+`manual_transactions` (type, amount, account, merchant, optional category, date), edited on the
+frontend's Settings page (Manual section) through `/api/manual-transactions` (`routes/manual-transactions.ts` →
+`db/manual-transactions.ts`). They live in their own table because every import rebuilds `transactions`
+from scratch: `importFromChatDb()` loads them (`loadManualTransactions()`), stages them
+(`stageManualTransactions()` in `utils/helpers/manual-transactions.ts`) and inserts a copy next to the SMS
+rows, counted in the balances, so none is lost to a re-import. A new, edited or deleted one reaches the
+ledger at the next import. Config's `manualTransactions` is **seed-only** and the file is never changed:
+the first start that finds the table empty (`seedManualTransactions()` in `server.ts`) copies each entry in,
+and `seedDemo()` replaces the table with the demo config's. Like schedules, remove the key once seeded, or
+emptying the table makes the next start copy it again.
+
+## Settings
+
+Accounts, source keys, transfer rules and bank senders are rows, edited on the frontend's Settings page
+(four tabs) through `/api/accounts`, `/api/account-sources`, `/api/transfer-rules` and `/api/bank-senders`
+(each `routes/` file → `validation/settings.ts` → `db/accounts.ts`, `db/transfer-rules.ts`,
+`db/bank-senders.ts`). `accounts` holds `id` (what every ledger row stores), `label`, `currency` and
+`opening_balance`; the id and currency can't be edited once saved. `account_sources.account_id` and both
+`transfer_rules` account columns are **foreign keys with `ON DELETE RESTRICT`**, so an unknown account id is
+refused by the database (a 400). The older tables' `account` columns (`transactions`, `schedules`,
+`manual_transactions`, `monthly_balances`) are plain text with no foreign key, so `deleteAccount()` counts
+what names an account (those, sources, rules and config's `csvImports`) and refuses with a 409 listing them.
+A transfer rule's empty `merchant` means any merchant; `(account, type, merchant)` is unique and the import
+tries a rule with a merchant before the catch-alls.
+
+The import and learn read these **once at their start** with `loadIngestSettings()` (`db/settings.ts`) and
+pass the snapshot down: `createPatternParser(files, settings)` (accounts and sources),
+`classifyTransfer(tx, rules)`, `readMessages(path, senders)` and the opening balances of
+`recomputeBalances` / `openingFor`. Nothing reads these from config at run time, and the validators that need
+the account list (`parseScheduleRequest`, `parseManualTransactionRequest`, `parseTransactionFilters`) take
+it as a parameter, fetched by the route. Config's `accounts`, `openingBalances`, `accountSources`,
+`transferRules` and `bankSenders` are **seed-only**: the first start that finds each table empty
+(`seedSettings()` in `server.ts`, accounts first) stores them, later starts never read them again, and
+emptying a table makes the next start seed it again, so remove the keys once seeded. `seedDemo()`
+replaces all four tables with the demo config's (`replaceSettings()`). `csvImports` is still live config.
+
 ## Private config
 
-Everything personal lives in `backend/config/wealthi.json` (gitignored), validated at startup by the
+Everything personal starts in `backend/config/wealthi.json` (gitignored), validated at startup by the
 Zod schema in `utils/config/schema.ts`; `wealthi.example.json` is the committed shape — update it
-whenever the shape changes.
+whenever the shape changes. Most of it is seed-only (see *Settings*, *Categories*, *Schedules*, *Manual
+transactions*); what is read live is `csvImports`.
 
 Two config errors are fatal, because neither can be repaired without inventing data: a duplicate
 `accounts[].id`, and a declared account with no `openingBalances` entry. Everything else about
@@ -211,15 +256,15 @@ still starts. Each drop is printed to stderr at startup with what it cost: `tag 
 `transferRules` entry or a `csvImports[].counterAccount` — a transfer is a tag, so balances are
 unaffected), `no longer imported` (an `accountSources` mapping, a manual entry, a recurring entry not
 yet seeded into `schedules`, or a whole
-`csvImports` entry — **these change balances**), or `none` (a dead `openingBalances` key). Config is
+`csvImports` entry — **these change balances**), or `none` (a dead `openingBalances` key). With no
+`accounts` in the file (the key removed once seeded) nothing is checked or pruned. Config is
 read once, at module import: edits need a server restart. Learned patterns are not config: they live
 in the `sms_patterns` table and each import reads the enabled ones afresh. Any `backend/config/patterns/`
 left from before is no longer read.
 
-Accounts are **not hardcoded**: `account`/`counter_account` hold ids from `accounts`. Patterns never
-name an account — a match yields a source key `<bank>:<last4>` (e.g. `example-bank:1234`) that
-`accountSources` maps to an account id. (The schema's `accountSources` comment still describes the
-old per-parser keys; the key format here is the current one.)
+Accounts are **not hardcoded**: `account`/`counter_account` hold ids from the `accounts` table. Patterns
+never name an account — a match yields a source key `<bank>:<last4>` (e.g. `example-bank:1234`) that
+the `account_sources` table maps to an account id.
 
 ## Key design rules
 
@@ -236,14 +281,14 @@ old per-parser keys; the key format here is the current one.)
   in (`createAllTransactions`, `upsertAllBalances`), never the global `prisma`. `importer2.ts` moves
   the cursor in that same transaction, so it never runs ahead of the rows it covers.
 - **Only enabled patterns parse.** Learn adds new patterns `pending` and never changes the status or
-  text of one already stored; only the Learn page's review or toggle (`PATCH /api/patterns`) sets a
+  text of one already stored; only the Settings → Learn review or toggle (`PATCH /api/patterns`) sets a
   status. No match is an error (`no enabled pattern matched`), never a guess.
 - **Parse errors are collected, not thrown** (except an undecodable message — a known bug, see Tests).
   A foreign-currency charge on a local-currency account is `skipped` on purpose, not an error.
 - **Merchant strings are exact.** `merchant_categories` and transfer rules key on them; editing a pattern
   can silently break those keys.
 - **Transfers are a tag, not a type**: a normal debit/credit with a `counterAccount`, set by
-  `config.transferRules` — never by amount-and-date guessing.
+  the `transfer_rules` table — never by amount-and-date guessing.
 - **Money is `Minor` (integer minor units, `utils/money.ts`).** Parse with `parseMinor`, never via a
   float; sums are integer; Prisma gets `minorToDecimal` strings; only API responses become numbers.
   `round2` is for percentages only.
@@ -258,7 +303,7 @@ old per-parser keys; the key format here is the current one.)
   and any forms are `shrink-0`, and only the list/table is the scroll area (`min-h-0 overflow-y-auto`,
   with `flex-1 min-h-0` on every flex ancestor in between; table headers are `sticky top-0`). The title,
   filters and add-forms must never scroll away. Reference: `TransactionsPage`, `SpendingPage`,
-  `CategoriesPage`, `SchedulesPage`, `LearnPage`. Every new page with a growing list follows this.
+  `CategoriesPage`, `SchedulesPage`, `SettingsPage`. Every new page with a growing list follows this.
 - **Styling comes from `frontend/src/styles/theme.css` tokens.** Tailwind's palette is off: no hex, no
   `text-blue-500`, no `bg-primary/10` (tints are tokens: `bg-primary-soft`), no `opacity-*` for
   states, no `@apply` (repeated classes become a component in `components/`).
@@ -306,15 +351,15 @@ sets `WEALTHI_DEMO=true`, points config at `backend/demo/`, binds `0.0.0.0` and 
 holds synthetic data only. `.dockerignore` keeps `backend/config/` and `backend/data/` out of it.
 
 On start the container runs `prisma db push`, then `seedDemo()` (`src/demo/seed.ts`): it replaces
-`sms_patterns` with `backend/demo/patterns/`, the categories with the demo config's and the schedules
-with its `recurringTransactions` (none), `demoLedger(now)` writes six months of made-up SMS to a
+`sms_patterns` with `backend/demo/patterns/`, the accounts, sources, transfer rules and senders and the categories with the demo config's and the schedules
+with `demoSchedules(now)` (one subscription), the manual transactions with `demoManualTransactions(now)` (`src/demo/extras.ts`, dated relative to now, all on the credit card so no reconciled month gains a discrepancy), `demoLedger(now)` writes six months of made-up SMS to a
 throwaway `chat.db`, and the live `importer.ts` rebuilds the database from it — so every restart (and
-every import from the dashboard) resets the demo, including category edits, schedules and pattern toggles. A learn
-from the demo's Learn page reads the same ledger and finds nothing new. `seedDemo()` refuses to run
+every import from Settings) resets the demo, including category edits, schedules and pattern toggles. A learn
+from the demo's Settings → Learn reads the same ledger and finds nothing new. `seedDemo()` refuses to run
 unless the config is `backend/demo/`'s, every stored SMS row has a `demo-` guid and every stored pattern
 is `demo-bank`'s. `DEMO_SENDER` (`Demo Bank`) must slug to that bank: the parser finds patterns by `bankOf(sender)`.
 
-`backend/demo/wealthi.demo.json` and `src/demo/ledger.ts` must agree: opening balances (`OPENING`),
+`backend/demo/wealthi.demo.json` also carries one CSV import (`backend/demo/card-rewards.csv`, a monthly cashback on the card). It, `src/demo/extras.ts` and `src/demo/ledger.ts` must agree: opening balances (`OPENING`),
 merchant strings (categories, transfer rules) and card digits. `backend/demo/patterns/demo-bank.json`
 is `learnBank()`'s output over the demo SMS, enabled, with the card's available limit unlabelled;
 `test/unit/demo.test.ts` fails if a ledger change makes learn mine something else, and

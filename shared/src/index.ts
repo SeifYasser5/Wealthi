@@ -8,8 +8,8 @@
 // ─── Primitives ──────────────────────────────────────────────────────────────
 
 /**
- * One of your own accounts. The set is configured, not hardcoded: see
- * `accounts` in backend/config/wealthi.json, served by GET /api/accounts.
+ * One of your own accounts. The set is stored, not hardcoded: the `accounts`
+ * table, edited on the Settings page and served by GET /api/accounts.
  */
 export type AccountId = string
 
@@ -29,18 +29,105 @@ export interface ApiError {
   error: string
 }
 
-// ─── GET /api/accounts ───────────────────────────────────────────────────────
+// ─── /api/accounts ───────────────────────────────────────────────────────────
 
 /** One of your own accounts. The id is what transactions and balances store. */
 export interface Account {
   id: AccountId
   label: string
   currency: Currency
+  /**
+   * The balance at the start of the import's rolling window: the number the
+   * first computed month opens from. Negative for a card that owes.
+   */
+  openingBalance: number
 }
 
 export interface AccountsResponse {
   /** Your accounts in display order, with the label and currency the UI shows. */
   accounts: Account[]
+}
+
+/** POST /api/accounts. The id and the currency can't be changed afterwards. */
+export interface AccountRequest {
+  /** Letters, digits, "_" and "-"; what every ledger row stores */
+  id: AccountId
+  label: string
+  currency: Currency
+  openingBalance: number
+}
+
+/** PUT /api/accounts/:id */
+export interface AccountUpdateRequest {
+  label: string
+  openingBalance: number
+}
+
+export interface AccountResponse {
+  account: Account
+}
+
+// ─── /api/account-sources ────────────────────────────────────────────────────
+
+/**
+ * Which account a source key lands on. A pattern match yields "<bank>:<last 4
+ * digits>"; patterns never name an account.
+ */
+export interface AccountSource {
+  source: string
+  account: AccountId
+}
+
+export interface AccountSourcesResponse {
+  accountSources: AccountSource[]
+}
+
+/** PUT /api/account-sources: maps `source` to `account`, moving it if it was mapped elsewhere. */
+export type AccountSourceRequest = AccountSource
+
+export interface AccountSourceResponse {
+  accountSource: AccountSource
+}
+
+// ─── /api/transfer-rules ─────────────────────────────────────────────────────
+
+/** POST /api/transfer-rules and PUT /api/transfer-rules/:id (replace). */
+export interface TransferRuleRequest {
+  /** Which account's SMS this applies to */
+  account: AccountId
+  /** Which leg: debit = money out, credit = money in */
+  type: TransactionType
+  /** Exactly as the bank prints it. Empty matches any merchant on this account and direction. */
+  merchant: string
+  /** The own account on the other side of the transfer */
+  counterAccount: AccountId
+}
+
+/** A rule that tags a matching leg as an internal transfer at the next import. */
+export interface TransferRule extends TransferRuleRequest {
+  id: number
+}
+
+/** GET /api/transfer-rules: specific merchants first, as the import tries them. */
+export interface TransferRulesResponse {
+  transferRules: TransferRule[]
+}
+
+export interface TransferRuleResponse {
+  transferRule: TransferRule
+}
+
+// ─── /api/bank-senders ───────────────────────────────────────────────────────
+
+/** GET /api/bank-senders, and the answer to POST and DELETE: the senders SMS are read from. */
+export interface BankSendersResponse {
+  /** chat.db `handle.id` values: a display name or a phone number */
+  bankSenders: string[]
+}
+
+/** POST /api/bank-senders */
+export interface BankSenderRequest {
+  sender: string
 }
 
 // ─── GET /api/transactions ───────────────────────────────────────────────────
@@ -275,7 +362,7 @@ export interface ManualTransaction extends ManualTransactionRequest {
   category: string | null
 }
 
-/** GET /api/manual-transactions: every manual transaction, newest first. */
+/** GET /api/manual-transactions[?yearMonth=YYYY-MM]: the manual transactions, newest first. */
 export interface ManualTransactionsResponse {
   manualTransactions: ManualTransaction[]
 }

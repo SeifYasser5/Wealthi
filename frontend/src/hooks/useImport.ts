@@ -8,7 +8,7 @@ const IMPORT_KEY = ['import']
  * Runs the import and tracks its latest run.
  *
  * The state is read back from the mutation cache rather than from this
- * component's own mutation, so leaving the dashboard mid-import and coming back
+ * component's own mutation, so leaving Settings mid-import and coming back
  * still shows it running, then its report. The import rebuilds every
  * transaction and balance, so when it finishes the ledger views refetch.
  */

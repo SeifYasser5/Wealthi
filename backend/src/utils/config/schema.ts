@@ -6,6 +6,10 @@ import { numberToMinor } from '../money'
  * map onto them, opening balances, the merchant category map, transfer rules
  * (which carry real names) and manual entries.
  *
+ * Most of it is seed only: read once, into a table, by the first start that
+ * finds the table empty, and edited on the app's pages from then on. What stays
+ * live config is `csvImports`.
+ *
  * Lives in backend/config/wealthi.json (gitignored). A committed
  * wealthi.example.json documents the shape — copy it to get started.
  *
@@ -140,18 +144,26 @@ const CsvImport = z
 export const WealthiConfigSchema = z
   .object({
     /**
-     * chat.db `handle.id` of each bank's SMS sender — the display name or phone
-     * number your bank sends from. Only messages from these handles are imported.
+     * Seed only: chat.db `handle.id` of each bank's SMS sender — the display
+     * name or phone number your bank sends from. Only messages from these
+     * handles are imported. Read once, into bank_senders, by the first start
+     * that finds no sender stored (db/settings.ts); the Settings page edits
+     * them from then on.
      */
-    bankSenders: z.array(z.string().min(1)).min(1),
-    accounts: z.array(Account).min(1),
+    bankSenders: z.array(z.string().min(1)).default([]),
+    /** Seed only, like bankSenders: read into accounts, with openingBalances */
+    accounts: z.array(Account).default([]),
     /**
-     * Parser source → own account. Parsers emit a bank-level source such as
-     * "adcb:card" or "adcb:account:<last 4 digits>"; see each parser for its keys.
+     * Seed only, like bankSenders: source key → own account, read into
+     * account_sources. A pattern match yields "<bank>:<last 4 digits>"
+     * (e.g. "example-bank:1234").
      */
-    accountSources: z.record(z.string(), AccountRef),
-    /** Genesis balances, used for the first month with no earlier snapshot */
-    openingBalances: z.record(AccountRef, z.number().transform(toMinor)),
+    accountSources: z.record(z.string(), AccountRef).default({}),
+    /**
+     * Seed only, like bankSenders: the balance at the start of the import's
+     * rolling window, per account id, read into accounts.opening_balance.
+     */
+    openingBalances: z.record(AccountRef, z.number().transform(toMinor)).default({}),
     /**
      * Seed only: merchant name as printed by the bank → category name. Read
      * once, into the categories and merchant_categories tables, by the first
@@ -161,10 +173,12 @@ export const WealthiConfigSchema = z
     merchantCategories: z.record(z.string(), z.string().trim().min(1)).default({}),
     /** Seed only, like merchantCategories: categories no merchant maps to */
     extraCategories: z.array(z.string().trim().min(1)).default([]),
-    transferRules: z.array(TransferRule),
+    /** Seed only, like bankSenders: read into transfer_rules */
+    transferRules: z.array(TransferRule).default([]),
     /** Seed only, like merchantCategories: see RecurringEntry */
     recurringTransactions: z.array(RecurringEntry).default([]),
-    manualTransactions: z.array(ManualEntry),
+    /** Seed only, like recurringTransactions: copied into manual_transactions by the first start that finds it empty */
+    manualTransactions: z.array(ManualEntry).default([]),
     /** Optional; defaults to none */
     csvImports: z.array(CsvImport).default([]),
   })
@@ -213,7 +227,8 @@ export type DroppedRef = {
  * So the loader prunes rather than throws — but never silently: `dropped` is
  * what the startup warning prints, because two of these do move money.
  *
- * Per-key reasoning:
+ * Per-key reasoning (the accounts are the file's own; once the `accounts` key is
+ * gone, from the file or never there, nothing is pruned):
  * - `accountSources` — the source stops resolving, so messages on it become
  *   collected parse errors ("no account mapped for source"), as they already
  *   would for an unmapped card.
@@ -222,13 +237,19 @@ export type DroppedRef = {
  * - `transferRules` — a transfer is a tag, not a type, so the leg still lands
  *   as a plain debit/credit and balances are unaffected. Only the tag is lost.
  * - `manualTransactions` / `recurringTransactions` — these are real rows in
- *   `transactions` *and* in the balance math (recurring ones once seeded as
- *   schedules). Dropping them changes balances.
+ *   `transactions` *and* in the balance math once seeded (into
+ *   `manual_transactions` / `schedules`). Dropping one that is not yet seeded
+ *   changes balances.
  * - `csvImports` — an unknown `account` leaves the rows nowhere to land, so the
  *   whole import goes (changing balances). An unknown `counterAccount` is only
  *   the transfer tag, so the rows are kept and the tag cleared.
  */
 export function pruneUnknownAccounts(config: WealthiConfig): { config: WealthiConfig; dropped: DroppedRef[] } {
+  // With no accounts declared (the key removed once seeded into the accounts
+  // table) there is nothing to compare against, and dropping every csvImport
+  // for naming an account the file no longer lists would be wrong.
+  if (config.accounts.length === 0) return { config, dropped: [] }
+
   const ids = new Set(config.accounts.map((a) => a.id))
   const dropped: DroppedRef[] = []
   const drop = (path: string, account: string, effect: DroppedRef['effect']) => {

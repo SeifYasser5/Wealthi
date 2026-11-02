@@ -9,7 +9,7 @@ type ConfigInput = z.input<typeof WealthiConfigSchema>
 type CsvInput = NonNullable<ConfigInput['csvImports']>[number]
 type RecurringInput = NonNullable<ConfigInput['recurringTransactions']>[number]
 
-const valid = (): ConfigInput & { csvImports: CsvInput[]; recurringTransactions: RecurringInput[] } => ({
+const valid = (): Required<ConfigInput> & { csvImports: CsvInput[]; recurringTransactions: RecurringInput[] } => ({
   bankSenders: ['Bank'],
   accounts: [
     { id: 'a', label: 'A', currency: 'EGP' },
@@ -73,9 +73,19 @@ describe('WealthiConfigSchema', () => {
     )
   })
 
-  it('requires at least one sender and one account', () => {
-    expect(issues({ ...valid(), bankSenders: [] })).toContainEqual(expect.stringMatching(/^bankSenders:/))
-    expect(issues({ ...valid(), accounts: [], openingBalances: {} }).join()).toMatch(/accounts:/)
+  it('defaults the settings seed keys to nothing, once they have been seeded', () => {
+    expect(WealthiConfigSchema.parse({})).toMatchObject({
+      bankSenders: [],
+      accounts: [],
+      accountSources: {},
+      openingBalances: {},
+      transferRules: [],
+      manualTransactions: [],
+    })
+  })
+
+  it('refuses a blank sender', () => {
+    expect(issues({ ...valid(), bankSenders: [''] })).toContainEqual(expect.stringMatching(/^bankSenders\.0:/))
   })
 
   it('rejects duplicate account ids', () => {
@@ -180,6 +190,19 @@ describe('pruneUnknownAccounts', () => {
     expect(config).toEqual(parsed)
   })
 
+  it('prunes nothing once the accounts key is gone, so csvImports survive it', () => {
+    const parsed = WealthiConfigSchema.parse({
+      ...valid(),
+      accounts: [],
+      openingBalances: {},
+      accountSources: {},
+      transferRules: [],
+    })
+    const { config, dropped } = pruneUnknownAccounts(parsed)
+    expect(dropped).toEqual([])
+    expect(config.csvImports).toHaveLength(1)
+  })
+
   it('drops every reference to a removed account and says what each cost', () => {
     const { config, dropped } = pruneUnknownAccounts(withoutB())
     // `b` was only ever the counterAccount of the transfer rule and the csv import.
@@ -259,14 +282,10 @@ describe('config loading', () => {
 
   const load = () => import('../../src/utils/config')
 
-  it('loads the file WEALTHI_CONFIG_PATH names and derives the account lookups', async () => {
+  it('loads the file WEALTHI_CONFIG_PATH names', async () => {
     const config = await load()
     expect(config.CONFIG_PATH).toBe(resolve(__dirname, '../fixtures/wealthi.test.json'))
-    expect(config.ALL_ACCOUNTS).toEqual(['checking', 'card', 'savings_usd'])
-    expect(config.isAccountId('card')).toBe(true)
-    expect(config.isAccountId('nope')).toBe(false)
-    expect(config.accountFor('test-bank:1111')).toBe('checking')
-    expect(config.accountFor('test-bank:0000')).toBeUndefined()
+    expect(config.config.accounts.map((a) => a.id)).toEqual(['checking', 'card', 'savings_usd'])
   })
 
   it('falls back to config/wealthi.json without the override', async () => {
@@ -286,7 +305,7 @@ describe('config loading', () => {
 
   it('stops with every issue and its path when the file is invalid', async () => {
     const file = join(dir, 'bad.json')
-    writeFileSync(file, JSON.stringify({ ...valid(), bankSenders: [], openingBalances: { a: 0 } }))
+    writeFileSync(file, JSON.stringify({ ...valid(), bankSenders: [''], openingBalances: { a: 0 } }))
     vi.stubEnv('WEALTHI_CONFIG_PATH', file)
     const error = await load().then(
       () => null,
@@ -307,7 +326,7 @@ describe('config loading', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     const mod = await load()
-    expect(mod.ALL_ACCOUNTS).toEqual(['a'])
+    expect(mod.config.accounts.map((a) => a.id)).toEqual(['a'])
     expect(mod.config.transferRules).toEqual([])
 
     const message = warn.mock.calls[0]?.[0] as string

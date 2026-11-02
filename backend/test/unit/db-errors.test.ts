@@ -7,6 +7,9 @@ const prisma = vi.hoisted(() => ({
   $transaction: vi.fn(),
   transaction: { update: vi.fn() },
   merchantCategory: { upsert: vi.fn() },
+  account: { update: vi.fn() },
+  accountSource: { upsert: vi.fn() },
+  transferRule: { create: vi.fn(), update: vi.fn(), delete: vi.fn() },
   schedule: { create: vi.fn(), update: vi.fn(), delete: vi.fn() },
 }))
 vi.mock('../../src/db/client', () => ({ prisma }))
@@ -16,6 +19,8 @@ const { updateCategory } = await import('../../src/db/transactions')
 const { createCategory, deleteCategory, renameCategory, setMerchantCategory } = await import('../../src/db/categories')
 
 const { createSchedule, deleteSchedule, updateSchedule } = await import('../../src/db/schedules')
+const { createAccount, deleteAccount, setAccountSource, updateAccount } = await import('../../src/db/accounts')
+const { createTransferRule, deleteTransferRule, updateTransferRule } = await import('../../src/db/transfer-rules')
 
 const failWith = (code: string) => Object.assign(new Error(code), { code })
 
@@ -91,5 +96,77 @@ describe('schedule writes', () => {
     await expect(createSchedule(input)).rejects.toBe(error)
     await expect(updateSchedule(1, input)).rejects.toBe(error)
     await expect(deleteSchedule(1)).rejects.toBe(error)
+  })
+})
+
+// Writes racing another request, or failing for a reason that is not the caller's.
+describe('account writes', () => {
+  const account = { id: 'wallet', label: 'Wallet', currency: 'EGP' as const, openingBalance: 0 as import('../../src/utils/money').Minor } // prettier-ignore
+
+  it('a unique violation on create is a duplicate', async () => {
+    prisma.$transaction.mockRejectedValue(failWith('P2002'))
+    expect(await createAccount(account)).toEqual({ refused: 'conflict', error: 'account "wallet" already exists' })
+  })
+
+  it('"record not found" on update is a not found refusal', async () => {
+    prisma.account.update.mockRejectedValue(failWith('P2025'))
+    expect(await updateAccount('wallet', account)).toEqual({
+      refused: 'not found',
+      error: 'account "wallet" not found',
+    })
+  })
+
+  it('a foreign key violation on delete is "in use"', async () => {
+    prisma.$transaction.mockRejectedValue(failWith('P2003'))
+    expect(await deleteAccount('wallet')).toEqual({ refused: 'conflict', error: 'account "wallet" is in use' })
+  })
+
+  it('a foreign key violation on a source is an account that does not exist', async () => {
+    prisma.accountSource.upsert.mockRejectedValue(failWith('P2003'))
+    expect(await setAccountSource('x:1', 'gone')).toEqual({
+      refused: 'invalid',
+      error: 'account "gone" does not exist',
+    })
+  })
+
+  it('rethrows any other error', async () => {
+    const error = failWith('P2034')
+    prisma.$transaction.mockRejectedValue(error)
+    prisma.account.update.mockRejectedValue(error)
+    prisma.accountSource.upsert.mockRejectedValue(error)
+    await expect(createAccount(account)).rejects.toBe(error)
+    await expect(updateAccount('wallet', account)).rejects.toBe(error)
+    await expect(deleteAccount('wallet')).rejects.toBe(error)
+    await expect(setAccountSource('x:1', 'wallet')).rejects.toBe(error)
+  })
+})
+
+describe('transfer rule writes', () => {
+  const rule = { account: 'a', type: 'debit' as const, merchant: '', counterAccount: 'b' }
+
+  it('a unique violation is a duplicate, whether it is created or replaced', async () => {
+    prisma.transferRule.create.mockRejectedValue(failWith('P2002'))
+    prisma.transferRule.update.mockRejectedValue(failWith('P2002'))
+    const refusal = { refused: 'conflict', error: 'a debit rule for any merchant on "a" already exists' }
+    expect(await createTransferRule(rule)).toEqual(refusal)
+    expect(await updateTransferRule(1, rule)).toEqual(refusal)
+  })
+
+  it('"record not found" is a not found refusal, for a replace and a delete', async () => {
+    prisma.transferRule.update.mockRejectedValue(failWith('P2025'))
+    prisma.transferRule.delete.mockRejectedValue(failWith('P2025'))
+    const refusal = { refused: 'not found', error: 'transfer rule 1 not found' }
+    expect(await updateTransferRule(1, rule)).toEqual(refusal)
+    expect(await deleteTransferRule(1)).toEqual(refusal)
+  })
+
+  it('rethrows any other error', async () => {
+    const error = failWith('P2034')
+    prisma.transferRule.create.mockRejectedValue(error)
+    prisma.transferRule.update.mockRejectedValue(error)
+    prisma.transferRule.delete.mockRejectedValue(error)
+    await expect(createTransferRule(rule)).rejects.toBe(error)
+    await expect(updateTransferRule(1, rule)).rejects.toBe(error)
+    await expect(deleteTransferRule(1)).rejects.toBe(error)
   })
 })

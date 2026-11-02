@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { fixtureAccounts } from '../fixtures/settings'
 import { parsePatternStatusUpdate } from '../../src/validation/patterns'
 import { parseTransactionFilters } from '../../src/validation/transactions'
 import {
@@ -14,15 +15,18 @@ const ID = '0b6c7d2e-1a2b-4c3d-8e9f-0a1b2c3d4e5f'
 describe('parseTransactionFilters', () => {
   it('accepts every filter and drops unknown params', () => {
     expect(
-      parseTransactionFilters({
-        yearMonth: '2026-01',
-        account: 'checking',
-        merchant: 'acme',
-        type: 'debit',
-        transfer: 'only',
-        counterAccount: 'card',
-        page: '2',
-      }),
+      parseTransactionFilters(
+        {
+          yearMonth: '2026-01',
+          account: 'checking',
+          merchant: 'acme',
+          type: 'debit',
+          transfer: 'only',
+          counterAccount: 'card',
+          page: '2',
+        },
+        fixtureAccounts,
+      ),
     ).toEqual({
       value: {
         yearMonth: '2026-01',
@@ -33,7 +37,7 @@ describe('parseTransactionFilters', () => {
         counterAccount: 'card',
       },
     })
-    expect(parseTransactionFilters({})).toEqual({ value: {} })
+    expect(parseTransactionFilters({}, fixtureAccounts)).toEqual({ value: {} })
   })
 
   it.each([
@@ -46,11 +50,11 @@ describe('parseTransactionFilters', () => {
     [{ transfer: 'yes' }, 'transfer must be one of: only, exclude'],
     [{ counterAccount: 'card', transfer: 'exclude' }, 'counterAccount cannot be combined with transfer=exclude'],
   ])('rejects %j', (query, error) => {
-    expect(parseTransactionFilters(query)).toEqual({ error })
+    expect(parseTransactionFilters(query, fixtureAccounts)).toEqual({ error })
   })
 
   it('reports only the first bad param', () => {
-    expect(parseTransactionFilters({ yearMonth: 'x', account: 'y' })).toEqual({
+    expect(parseTransactionFilters({ yearMonth: 'x', account: 'y' }, fixtureAccounts)).toEqual({
       error: 'yearMonth must be in YYYY-MM format',
     })
   })
@@ -142,7 +146,9 @@ describe('parseMerchantCategory', () => {
 
 describe('validation edge cases', () => {
   it('accepts transfer=exclude on its own', () => {
-    expect(parseTransactionFilters({ transfer: 'exclude' })).toEqual({ value: { transfer: 'exclude' } })
+    expect(parseTransactionFilters({ transfer: 'exclude' }, fixtureAccounts)).toEqual({
+      value: { transfer: 'exclude' },
+    })
   })
 
   it('rejects a null body', () => {

@@ -1,11 +1,13 @@
 import request from 'supertest'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { fixtureAccounts } from '../fixtures/settings'
 
 // The HTTP layer with every db module mocked: status codes, error mapping and
 // the paths a real database can't easily be pushed into (a failing query, a
 // down database). The happy paths against real Postgres live in integration/api.test.ts.
 
 const db = vi.hoisted(() => ({
+  listAccounts: vi.fn(),
   queryTransactions: vi.fn(),
   updateCategory: vi.fn(),
   findBalancesByMonth: vi.fn(),
@@ -25,6 +27,7 @@ const db = vi.hoisted(() => ({
   setMerchantCategory: vi.fn(),
   loadMerchantCategories: vi.fn(),
 }))
+vi.mock('../../src/db/accounts', () => ({ listAccounts: db.listAccounts }))
 vi.mock('../../src/db/transactions', () => ({
   queryTransactions: db.queryTransactions,
   updateCategory: db.updateCategory,
@@ -52,7 +55,10 @@ const { default: app } = await import('../../src/app')
 const ID = '0b6c7d2e-1a2b-4c3d-8e9f-0a1b2c3d4e5f'
 const boom = () => Promise.reject(new Error('connection refused'))
 
-beforeEach(() => vi.resetAllMocks())
+beforeEach(() => {
+  vi.resetAllMocks()
+  db.listAccounts.mockResolvedValue(fixtureAccounts)
+})
 
 describe('GET /api/health', () => {
   it('reports a connected database', async () => {
@@ -69,16 +75,10 @@ describe('GET /api/health', () => {
   })
 })
 
-describe('config-backed routes', () => {
-  it('GET /api/accounts lists the configured accounts', async () => {
+describe('GET /api/accounts', () => {
+  it('lists the stored accounts', async () => {
     const res = await request(app).get('/api/accounts').expect(200)
-    expect(res.body).toEqual({
-      accounts: [
-        { id: 'checking', label: 'Checking', currency: 'EGP' },
-        { id: 'card', label: 'Credit Card', currency: 'EGP' },
-        { id: 'savings_usd', label: 'Savings (USD)', currency: 'USD' },
-      ],
-    })
+    expect(res.body).toEqual({ accounts: fixtureAccounts })
   })
 })
 

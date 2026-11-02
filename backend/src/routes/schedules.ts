@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express'
+import { listAccounts } from '../db/accounts'
 import type { ScheduleResponse, SchedulesResponse, ScheduleSuggestionsResponse } from '@wealthi/shared'
 import { createSchedule, deleteSchedule, listSchedules, updateSchedule } from '../db/schedules'
 import { parseScheduleId, parseScheduleRequest } from '../validation/schedules'
@@ -41,7 +42,7 @@ router.get(
 router.post(
   '/',
   route('failed to create schedule', async (req: Request, res: Response) => {
-    const parsed = parseScheduleRequest(req.body)
+    const parsed = parseScheduleRequest(req.body, await listAccounts())
     if ('error' in parsed) return res.status(400).json({ error: parsed.error })
 
     const schedule = await createSchedule(parsed.value)
@@ -61,7 +62,7 @@ router.put(
   route('failed to update schedule', async (req: Request, res: Response) => {
     const id = parseScheduleId(req.params.id)
     if ('error' in id) return res.status(400).json({ error: id.error })
-    const parsed = parseScheduleRequest(req.body)
+    const parsed = parseScheduleRequest(req.body, await listAccounts())
     if ('error' in parsed) return res.status(400).json({ error: parsed.error })
 
     const schedule = await updateSchedule(id.value, parsed.value)

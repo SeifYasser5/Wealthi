@@ -150,6 +150,66 @@ model ManualTransaction {
   @@map("manual_transactions")
 }
 
+/// One of your own accounts, edited on the Settings page. Seeded once from
+/// config's accounts and openingBalances (db/settings.ts). `id` is what
+/// `transactions.account`, `schedules.account` and the other account columns store;
+/// those are plain text, so deleting an account is refused in code while any of
+/// them (or a source or transfer rule) still names it.
+model Account {
+  id             String          @id
+  label          String
+  currency       Currency
+  /// The balance at the start of the import's rolling window (see AGENTS.md),
+  /// the number the first computed month opens from.
+  openingBalance Decimal         @default(0) @map("opening_balance") @db.Decimal(12, 2)
+  /// The order every account list shows them in
+  position       Int
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  sources        AccountSource[]
+  transferRules  TransferRule[]  @relation("RuleAccount")
+  counterRules   TransferRule[]  @relation("RuleCounterAccount")
+
+  @@map("accounts")
+}
+
+/// Which account a source key lands on. A pattern match yields "<bank>:<last4>"
+/// and never names an account; this maps it to one. Seeded once from config's accountSources.
+model AccountSource {
+  source    String  @id
+  accountId String  @map("account_id")
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@index([accountId])
+  @@map("account_sources")
+}
+
+/// Tags a parsed leg as an internal transfer: a debit or credit on `account`
+/// with this merchant becomes a transfer to `counterAccount`. An empty merchant
+/// matches any merchant on that account and direction. Seeded once from config's transferRules.
+model TransferRule {
+  id               Int             @id @default(autoincrement())
+  accountId        String          @map("account_id")
+  account          Account         @relation("RuleAccount", fields: [accountId], references: [id], onDelete: Restrict)
+  /// Which leg this matches — debit = money out, credit = money in
+  type             TransactionType
+  /// Exactly as the bank prints it; empty matches any merchant
+  merchant         String          @default("")
+  counterAccountId String          @map("counter_account_id")
+  counterAccount   Account         @relation("RuleCounterAccount", fields: [counterAccountId], references: [id], onDelete: Restrict)
+
+  @@unique([accountId, type, merchant])
+  @@index([counterAccountId])
+  @@map("transfer_rules")
+}
+
+/// The chat.db handle.id (display name or phone number) a bank sends SMS from.
+/// Only messages from these handles are imported or learned from. Seeded once from config's bankSenders.
+model BankSender {
+  sender String @id
+
+  @@map("bank_senders")
+}
+
 /// The merchant map: a transaction with no manual category counts towards its
 /// merchant's. Seeded once from config's merchantCategories (db/categories.ts).
 model MerchantCategory {

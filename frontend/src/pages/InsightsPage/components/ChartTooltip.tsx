@@ -1,5 +1,5 @@
 import type { ChartSeries, Measure, Swatch } from '../../../utils/insights'
-import { SWATCH_BG, formatMeasure } from '../../../utils/insights'
+import { SWATCH_BG, formatMeasure, share } from '../../../utils/insights'
 
 /** The row a chart draws: a point's labels and swatch beside one value per series key. */
 export interface Datum {
@@ -59,11 +59,4 @@ export function ChartTooltip({ active, payload, measure, series, total }: Props)
       )}
     </div>
   )
-}
-
-/** "42%", or "<1%" for a sliver that would otherwise read as nothing. */
-export function share(value: number, total: number): string {
-  if (total <= 0) return '0%'
-  const pct = (value / total) * 100
-  return pct > 0 && pct < 1 ? '<1%' : `${Math.round(pct)}%`
 }

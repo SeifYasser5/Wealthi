@@ -16,7 +16,8 @@ test.afterEach(async ({ request }) => {
 test("lists the stored patterns in Enabled and Disabled tabs", async ({
   page,
 }) => {
-  await page.goto("/learn");
+  await page.goto("/settings");
+  await page.getByRole("radio", { name: "Learn" }).click();
   await expect(page.getByRole("tab", { name: "Enabled (3)" })).toBeVisible();
   await page.getByRole("tab", { name: "Disabled (1)" }).click();
   await expect(
@@ -25,7 +26,8 @@ test("lists the stored patterns in Enabled and Disabled tabs", async ({
 });
 
 test("a toggled pattern moves tab and stays moved", async ({ page }) => {
-  await page.goto("/learn");
+  await page.goto("/settings");
+  await page.getByRole("radio", { name: "Learn" }).click();
   await page
     .getByRole("checkbox", { name: "Enable test-bank:card-charge" })
     .click();
@@ -40,7 +42,8 @@ test("a toggled pattern moves tab and stays moved", async ({ page }) => {
 });
 
 test("learning without a chat.db says where it looked", async ({ page }) => {
-  await page.goto("/learn");
+  await page.goto("/settings");
+  await page.getByRole("radio", { name: "Learn" }).click();
   await page.getByRole("button", { name: "Learn patterns" }).click();
   await expect(
     page.getByRole("heading", { name: "Learn skipped" }),

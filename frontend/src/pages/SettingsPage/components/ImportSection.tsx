@@ -1,19 +1,15 @@
 import { RefreshCw } from 'lucide-react'
-import { ImportReport } from './components/ImportReport'
-import { ActionButton } from '../../components/ActionButton'
-import { PageTitle } from '../../components/PageHeader'
-import { useImport } from '../../hooks/useImport'
+import { ActionButton } from '../../../components/ActionButton'
+import { useImport } from '../../../hooks/useImport'
+import { ImportReport } from './ImportReport'
 
-export function DashboardPage() {
+/** Runs the import and shows its report. */
+export function ImportSection() {
   const { start, isPending, report, error } = useImport()
   const panel = 'rounded-3xl py-16 text-center text-sm'
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10">
-      <header className="mb-8">
-        <PageTitle>Dashboard</PageTitle>
-      </header>
-
+    <div className="min-h-0 flex-1 overflow-y-auto">
       <section className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-surface p-6">
         <div>
           <h2 className="text-xl font-semibold tracking-tight text-foreground">Import from chat.db</h2>

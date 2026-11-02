@@ -51,7 +51,7 @@ export function SummaryTiles({ current, previous, period, months }: Props) {
         value={currentRate === null ? '—' : `${Math.round(currentRate)}%`}
         note="of income kept"
         delta={currentRate === null || previousRate === null ? null : currentRate - previousRate}
-        unit="pts"
+        unit=" pts"
         upIsGood
       />
     </section>
@@ -121,7 +121,7 @@ export function Delta({
       className={`inline-flex shrink-0 items-center gap-0.5 rounded-full whitespace-nowrap px-2 py-0.5 text-xs font-semibold tabular-nums ${tone}`}
     >
       {rounded !== 0 && <Icon aria-hidden size={12} strokeWidth={2.5} />}
-      {rounded === 0 ? 'flat' : `${Math.abs(rounded)}${unit === '%' ? '%' : ` ${unit}`}`}
+      {rounded === 0 ? 'flat' : `${Math.abs(rounded)}${unit}`}
     </span>
   )
 }

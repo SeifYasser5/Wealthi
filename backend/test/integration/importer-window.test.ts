@@ -38,11 +38,18 @@ beforeAll(async () => {
   ;({ prisma } = await import('../../src/db/client'))
   const { importFromChatDb } = await import('../../src/services/importer')
   const { seedSchedules } = await import('../../src/db/schedules')
+  const { seedManualTransactions } = await import('../../src/db/manual-transactions')
+  const { seedSettings } = await import('../../src/db/settings')
   const { config } = await import('../../src/utils/config')
 
-  await resetDatabase()
-  // As the first start would: config's recurringTransactions become schedules.
+  // The full config's accounts and opening balances, not the default fixture's.
+  await resetDatabase({ settings: false })
+  // As the first start would: config's accounts, sources and transfer rules
+  // fill their tables, its recurringTransactions become schedules and its
+  // manualTransactions become manual_transactions rows.
+  await seedSettings(config)
   await seedSchedules(config.recurringTransactions)
+  await seedManualTransactions(config.manualTransactions)
   chatDb = buildChatDb(messages)
   summary = await importFromChatDb(chatDb.path)
 })

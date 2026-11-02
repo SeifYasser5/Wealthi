@@ -4,7 +4,7 @@ import { decode, DecodeError } from './ingest/decode'
 import { learnBank, type LearnedPattern } from './patterns/learn'
 import { bankOf } from './patterns/store'
 import { storeLearned } from '../db/patterns'
-import { config } from '../utils/config'
+import { listBankSenders } from '../db/bank-senders'
 import type { DecodedMessage } from '../utils/types'
 
 export interface LearnSummary {
@@ -26,10 +26,11 @@ export interface LearnSummary {
 export async function learnFromChatDb(chatDbPath: string): Promise<LearnSummary> {
   if (!existsSync(chatDbPath)) throw new Error(`chat.db not found at: ${chatDbPath}`)
 
+  const senders = await listBankSenders()
   const byBank = new Map<string, DecodedMessage[]>()
   let messages = 0
   let undecodable = 0
-  for (const row of readMessages(chatDbPath, config.bankSenders)) {
+  for (const row of readMessages(chatDbPath, senders)) {
     messages++
     try {
       const message = decode(row)

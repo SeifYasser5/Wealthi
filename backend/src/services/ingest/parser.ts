@@ -1,5 +1,4 @@
-import type { Currency, DecodedMessage, ParsedTransaction } from '../../utils/types'
-import { ACCOUNTS, accountFor } from '../../utils/config'
+import type { Currency, DecodedMessage, IngestSettings, ParsedTransaction } from '../../utils/types'
 import { CURRENCIES, extract, type Pattern, type PatternFile } from '../patterns/pattern'
 import { bankOf } from '../patterns/store'
 import { parseMinor, type Minor } from '../../utils/money'
@@ -17,7 +16,7 @@ import { sanitizeMessageText } from './sanitize'
  * - no match (OTPs, declines, promos, new templates), or values that don't add
  *   up → a ParseError, collected by the importer like any other parse error
  *
- * The account comes from accountSources["<bank>:<last 4 digits>"].
+ * The account comes from the account_sources table: "<bank>:<last 4 digits>" maps to one.
  */
 
 export class ParseError extends Error {
@@ -43,7 +42,10 @@ const PARSER = 'patterns'
 
 export type PatternParser = (message: DecodedMessage) => PatternParseResult
 
-export function createPatternParser(files: PatternFile[]): PatternParser {
+export function createPatternParser(
+  files: PatternFile[],
+  { accounts, accountSources }: Pick<IngestSettings, 'accounts' | 'accountSources'>,
+): PatternParser {
   const byBank = new Map<string, Pattern[]>()
   for (const file of files)
     byBank.set(
@@ -73,9 +75,9 @@ export function createPatternParser(files: PatternFile[]): PatternParser {
     const currency = CURRENCIES[x.currency ?? '']
     if (!currency) return fail(`${where}: unknown currency "${x.currency}"`)
     if (!x.accountKey) return fail(`${where}: no account number in message`)
-    const account = accountFor(x.accountKey)
+    const account = accountSources[x.accountKey]
     if (!account) return fail(`${where}: no account mapped for source "${x.accountKey}"`)
-    const accountCurrency = ACCOUNTS.find((a) => a.id === account)?.currency
+    const accountCurrency = accounts.find((a) => a.id === account)?.currency
     if (currency !== accountCurrency) {
       return {
         ok: false,

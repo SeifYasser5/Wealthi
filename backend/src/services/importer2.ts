@@ -9,8 +9,9 @@ import type {
   RecomputeBalance,
   ImportError,
   ImportSummary,
+  StoredAccount,
+  StoredTransferRule,
 } from '../utils/types'
-import { ALL_ACCOUNTS, config } from '../utils/config'
 import { decode } from './ingest/decode'
 import { createPatternParser, type PatternParser } from './ingest/parser'
 import { classifyTransfer } from './ingest/transfer'
@@ -21,6 +22,7 @@ import { findFromMonth, createAllTransactions } from '../db/transactions'
 import { getImportCursor, setImportCursor } from '../db/import-state'
 import { prisma } from '../db/client'
 import { loadEnabledPatterns } from '../db/patterns'
+import { loadIngestSettings } from '../db/settings'
 
 /**
  * Reads new bank SMS from chat.db, parses them into transactions, and refreshes
@@ -35,11 +37,12 @@ export const importFromChatDb = async (chatDbPath: string, now: Date = new Date(
   if (!existsSync(chatDbPath)) throw new Error(`chat.db not found at: ${chatDbPath}`)
 
   const cursor = await getImportCursor()
-  const messages = readMessages(chatDbPath, config.bankSenders, cursor)
-  const parser = createPatternParser(await loadEnabledPatterns())
-  const { transactions, errors, earliest, maxRowid } = stageMessages(messages, parser)
+  const settings = await loadIngestSettings()
+  const messages = readMessages(chatDbPath, settings.bankSenders, cursor)
+  const parser = createPatternParser(await loadEnabledPatterns(), settings)
+  const { transactions, errors, earliest, maxRowid } = stageMessages(messages, parser, settings.transferRules)
   if (transactions.length === 0 || earliest === null || maxRowid === null) return { months: 0, totalStored: 0, errors }
-  const { balances, months } = await recomputeBalances(transactions, earliest, toYearMonth(now))
+  const { balances, months } = await recomputeBalances(transactions, earliest, toYearMonth(now), settings.accounts)
 
   await prisma.$transaction(
     async (db) => {
@@ -60,7 +63,11 @@ export const importFromChatDb = async (chatDbPath: string, now: Date = new Date(
  * Parse failures are collected as errors rather than thrown, so one bad message
  * never aborts the import.
  */
-const stageMessages = (messages: DbRow[], parser: PatternParser): StageMessages => {
+const stageMessages = (
+  messages: DbRow[],
+  parser: PatternParser,
+  transferRules: StoredTransferRule[],
+): StageMessages => {
   const transactions: StagedTransaction[] = []
   const errors: ImportError[] = []
   let earliest: string | null = null
@@ -78,7 +85,7 @@ const stageMessages = (messages: DbRow[], parser: PatternParser): StageMessages 
       continue
     }
 
-    const tx = classifyTransfer(parsed.value)
+    const tx = classifyTransfer(parsed.value, transferRules)
     const yearMonth = toYearMonth(tx.transactedAt)
     transactions.push({ ...tx, yearMonth })
     if (earliest === null || yearMonth < earliest) earliest = yearMonth
@@ -98,18 +105,23 @@ const stageMessages = (messages: DbRow[], parser: PatternParser): StageMessages 
  * opening, which is why a single backdated transaction must redo every later
  * month.
  */
-const recomputeBalances = async (staged: StagedTransaction[], earliest: string, through: string): RecomputeBalance => {
+const recomputeBalances = async (
+  staged: StagedTransaction[],
+  earliest: string,
+  through: string,
+  accounts: StoredAccount[],
+): RecomputeBalance => {
   const months = monthRange(earliest, through)
   const stored = await findFromMonth(earliest)
   const byMonth = groupByMonth([...stored, ...staged])
   const balances: MinorBalance[] = []
-  let opening = await openingFor(months[0])
+  let opening = await openingFor(months[0], accounts)
 
   for (const yearMonth of months) {
     const byAccount = byMonth.get(yearMonth)
     const nextOpening = { ...opening }
 
-    for (const account of ALL_ACCOUNTS) {
+    for (const { id: account } of accounts) {
       const accountTxs = byAccount?.get(account) ?? []
       const balance = computeBalance(account, yearMonth, opening[account], accountTxs)
       balances.push(balance)

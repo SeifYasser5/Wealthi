@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express'
+import { listAccounts } from '../db/accounts'
 import { queryTransactions, updateCategory } from '../db/transactions'
 import { parseTransactionFilters } from '../validation/transactions'
 import { parseCategoryUpdate } from '../validation/categories'
@@ -18,7 +19,7 @@ const router = Router()
 router.get(
   '/',
   route('failed to query transactions', async (req: Request, res: Response) => {
-    const parsed = parseTransactionFilters(req.query)
+    const parsed = parseTransactionFilters(req.query, await listAccounts())
     if ('error' in parsed) return res.status(400).json({ error: parsed.error })
 
     const transactions = await queryTransactions(parsed.value)
